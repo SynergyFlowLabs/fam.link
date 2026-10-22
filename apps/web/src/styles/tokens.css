@@ -1,0 +1,60 @@
+/*
+  Design direction: a family ledger, not a SaaS dashboard.
+  Ink-on-paper with verdigris and lacquer accents; serif names, sans interface.
+  Every colour below is a token — no component defines its own hex.
+*/
+:root {
+  /* Ground */
+  --paper: #edf0ea;
+  --surface: #fbfaf6;
+  --surface-2: #f3f2ea;
+  --ink: #182726;
+  --ink-soft: #4d6360;
+  --ink-faint: #7c8b87;
+  --line: #d6d2c4;
+  --line-strong: #b9b3a1;
+
+  /* Accents */
+  --verdigris: #2c6b5f;
+  --verdigris-dark: #204f46;
+  --verdigris-wash: #dcebe5;
+  --lac: #8d3b4c;
+  --lac-wash: #f3e2e4;
+  --brass: #a8802f;
+  --brass-wash: #f2e8d2;
+
+  /* Semantic */
+  --ok: #2c6b5f;
+  --warn: #a8802f;
+  --danger: #8d3b4c;
+  --focus: #1f5f8b;
+
+  /* Type */
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  --font-ui: ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --step--1: 0.8125rem;
+  --step-0: 0.9375rem;
+  --step-1: 1.0625rem;
+  --step-2: 1.3125rem;
+  --step-3: 1.75rem;
+  --step-4: 2.375rem;
+
+  /* Space */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 14px;
+
+  --shadow-sm: 0 1px 2px rgba(24, 39, 38, 0.08);
+  --shadow-md: 0 6px 18px rgba(24, 39, 38, 0.1);
+  --shadow-lg: 0 18px 44px rgba(24, 39, 38, 0.16);
+}

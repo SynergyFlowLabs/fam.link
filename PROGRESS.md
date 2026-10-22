@@ -84,6 +84,31 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 3 — Web client: tree, people, calculator, invitations, activity ✅
+
+**Goal:** make the collaboration and privacy model visible, and make the calculator the thing you show someone.
+
+**Shipped** (`apps/web`)
+- `styles/tokens.css` + `styles/app.css` — an ink-on-paper design system (serif names, verdigris and lacquer accents, dotted archival ground), responsive to 390px, visible focus, reduced-motion support.
+- `tree/layout.ts` (+ tests) — pure generation assignment and deterministic layout, cycle-safe, partner grouping, barycentric row ordering.
+- `views/TreeView.tsx` — focus-window chart with pan, wheel zoom, reset, generation depth controls, partner/parent connectors, in-canvas toolbar, and an **accessible outline fallback**.
+- `views/TreeView.tsx` → `ProfilePanel` — relationship sentence + Urdu term, close family, field-level "hidden from you" disclosure, inline editing routed through authority (applied vs. sent for approval), proposal decisions, history, separation request.
+- `views/PeopleView.tsx` — visibility-scoped search, living/remembered directory, duplicate review with explainable signals, merge and dismiss.
+- `views/CalculatorView.tsx` — two-person picker, sentence result, basis and path, scrubbed copy-to-share.
+- `views/InvitationsView.tsx` — invite creation against an existing unclaimed profile, WhatsApp share, revoke, status list.
+- `views/InviteView.tsx` — public invitation page carrying the relationship, and a claim flow ("this is not me" included).
+- `views/ActivityView.tsx`, `components/ui.tsx`, `hooks.ts`, `api.ts` (relative URLs only; `/api` proxied).
+- `App.tsx` — shell, hash router, persona switcher, add-relative dialog with duplicate warning before creation.
+
+**Verification:** `npm test` → **81 passing** (59 domain + 16 API + 6 layout); `npm run typecheck` clean; `npm run build -w @famlink/web` succeeds; live dev servers exercised with curl (session → tree → relationship returns "first cousin · چچا زاد").
+
+**Deviations**
+1. `packages/ui` from the README's proposed layout is not created: there is still only one consumer. Components live in `apps/web/src/components`.
+2. The add-relative dialog posts relationship anchors (`parentId` / `partnerId` / `childId` / `siblingOfId`) and the API creates the edges; siblings are created by sharing parents, never by storing a sibling edge.
+3. Demo identity switching is prominent in the UI and labelled as a demo affordance, so it cannot be mistaken for real authentication.
+
+---
+
 <!-- NEXT STEPS APPENDED BELOW -->
 
 ---
@@ -104,24 +129,24 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [x] F-2.3 Relationship types (stored vs derived) — `MUST`
 - [x] F-2.4 Edit and correct any person — `MUST` *(API; history via activity log)*
 - [ ] F-2.5 Partial dates, places, uncertain facts — `MUST`
-- [ ] F-2.6 Guided onboarding — `MUST`
+- [ ] F-2.6 Guided onboarding — `MUST` *(not built: the demo starts from a populated family)*
 - [ ] F-2.7 Places lived — `COULD`
 - [ ] F-2.8 Biography — `SHOULD`
 - [ ] F-2.9 Profile photo — `MUST`
 
 ### E3 — Interactive visualisation
-- [ ] F-3.1 Focus-centred tree rendering — `MUST`
-- [ ] F-3.2 Zoom, pan, layout — `MUST`
-- [ ] F-3.3 Expand and collapse branches — `MUST`
-- [ ] F-3.4 Generation navigation — `MUST`
+- [x] F-3.1 Focus-centred tree rendering — `MUST`
+- [x] F-3.2 Zoom, pan, layout — `MUST`
+- [x] F-3.3 Expand and collapse branches — `MUST` *(depth controls; per-node collapse pending)*
+- [x] F-3.4 Generation navigation — `MUST` *(focus + depth controls; keyboard tree navigation pending)*
 - [ ] F-3.5 Compact vs detailed view — `SHOULD`
-- [ ] F-3.6 Accessible list fallback — `MUST`
+- [x] F-3.6 Accessible list fallback — `MUST`
 - [ ] F-3.7 Search within the tree — `SHOULD`
 
 ### E4 — Invitations and claiming
-- [x] F-4.1 Shareable invite link — `MUST` *(API; share UI pending)*
+- [x] F-4.1 Shareable invite link — `MUST`
 - [ ] F-4.2 Email invitation — `MUST` *(not sent; copy + link generation only)*
-- [ ] F-4.3 WhatsApp-friendly invitation — `MUST` *(copy generation pending in UI)*
+- [x] F-4.3 WhatsApp-friendly invitation — `MUST` *(share link generation; no delivery)*
 - [x] F-4.4 Claim an existing profile — `MUST` *(API)*
 - [x] F-4.5 Assign expected relationship at invite time — `MUST` *(API)*
 - [x] F-4.6 Invitation management + rate limits — `MUST` *(API)*
@@ -131,12 +156,12 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [x] F-5.2 Propose an edit — `MUST` *(API)*
 - [x] F-5.3 Direct edit within authority — `MUST` *(API)*
 - [x] F-5.4 Activity log — `MUST` *(API)*
-- [ ] F-5.5 Disputed values — `SHOULD`
+- [ ] F-5.5 Disputed values — `SHOULD` *(proposals exist; retained conflicting values pending)*
 - [ ] F-5.6 Revert — `SHOULD`
 - [ ] F-5.7 Comments on proposals — `COULD`
 
 ### E6 — Privacy and visibility
-- [ ] F-6.1 Private by default — `MUST` *(domain defaults implemented; space creation pending)*
+- [x] F-6.1 Private by default — `MUST`
 - [x] F-6.2 Field-level visibility — `MUST` *(domain projection + tests)*
 - [x] F-6.3 Hidden branches and blocked users — `MUST` *(domain gates + tests)*
 - [x] F-6.4 Separation and removal requests — `MUST` *(API)*
@@ -147,14 +172,14 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [x] F-7.1 Relationship between any two people — `MUST` *(domain only; UI pending)*
 - [x] F-7.2 Path and common ancestor — `MUST` *(domain only; UI pending)*
 - [x] F-7.3 Plain-language explanation — `MUST` *(domain only; UI pending)*
-- [ ] F-7.4 "How am I related to…" shortcut — `MUST`
-- [ ] F-7.5 Shareable result — `SHOULD`
-- [ ] F-7.6 Locale-aware kinship terminology — `SHOULD`
+- [x] F-7.4 "How am I related to…" shortcut — `MUST`
+- [x] F-7.5 Shareable result — `SHOULD` *(scrubbed copy text; no expiring share link yet)*
+- [x] F-7.6 Locale-aware kinship terminology — `SHOULD` *(Urdu terms; full locale set pending)*
 
 ### E8 — Search and duplicate prevention
 - [x] F-8.1 Search people before adding — `MUST` *(domain only; UI pending)*
 - [x] F-8.2 Duplicate detection — `MUST` *(domain only; review queue UI pending)*
-- [ ] F-8.3 Merge — `MUST` *(merge plan exists; API + UI pending)*
+- [x] F-8.3 Merge — `MUST` *(merge plan, API, and review UI; revert log pending)*
 - [x] F-8.4 People directory — `SHOULD` *(API)*
 
 ### E9 — Platform essentials
@@ -175,10 +200,10 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 |---|---|---|
 | S1 — Domain skeleton | Graph model, derivation, relationship calculator, tests | ✅ |
 | S2 — Persistence + API | Repository, seed family, auth-lite, REST endpoints | ✅ |
-| S3 — See it | Tree focus view, zoom/pan, expand/collapse, list fallback | ⬜ |
-| S4 — Invite it | Invitations, claim flow, onboarding | ⬜ |
-| S5 — Share it | Roles, proposals, activity log, disputes | ⬜ |
-| S6 — Trust it | Field-level privacy, hidden branches, separation, minors | ⬜ |
+| S3 — See it | Tree focus view, zoom/pan, expand/collapse, list fallback | ✅ |
+| S4 — Invite it | Invitations, claim flow, onboarding | 🟨 invitations + claim done; onboarding pending |
+| S5 — Share it | Roles, proposals, activity log, disputes | 🟨 disputes UI pending |
+| S6 — Trust it | Field-level privacy, hidden branches, separation, minors | 🟨 hidden-branch authoring UI pending |
 | S7 — Harden | Search, duplicates, export, i18n, a11y, tree health | ⬜ |
 
 ---
@@ -201,3 +226,4 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | 0 | n/a | n/a | n/a | Docs only |
 | 1 | ✅ clean | ✅ 59 passing | n/a | Domain package, no I/O |
 | 2 | ✅ clean | ✅ 75 passing | n/a | API + seed; no web client yet |
+| 3 | ✅ clean | ✅ 81 passing | ✅ web build 268 kB (82 kB gzip) | Dev servers exercised over HTTP |

@@ -457,6 +457,8 @@ export function createApp(): express.Express {
       isMinor?: boolean;
       parentId?: string;
       partnerId?: string;
+      childId?: string;
+      siblingOfId?: string;
       relationshipKind?: RelationshipKind;
       confirmDuplicate?: boolean;
       role?: string;
@@ -536,8 +538,32 @@ export function createApp(): express.Express {
       return relationship;
     };
 
+    const anchorIds = [body.parentId, body.partnerId, body.childId, body.siblingOfId].filter(Boolean) as Id[];
+    for (const anchorId of anchorIds) {
+      const anchor = index.persons.get(anchorId);
+      if (!anchor || !allow(anchorId)) {
+        store.persons.splice(store.persons.findIndex((candidate) => candidate.id === person.id), 1);
+        response.status(404).json({ error: 'Person not found.' });
+        return;
+      }
+    }
+
     if (body.parentId) addRelationship(body.parentId, person.id, body.relationshipKind ?? 'biological-parent');
     if (body.partnerId) addRelationship(body.partnerId, person.id, 'spouse');
+    // The new person is the parent of the chosen person.
+    if (body.childId) addRelationship(person.id, body.childId, 'biological-parent');
+    // A sibling shares the anchor's parents; we never store a sibling edge (ADR 0001).
+    if (body.siblingOfId) {
+      const anchorParents = (index.parentsByChild.get(body.siblingOfId) ?? []).map((relationship) => relationship.fromPersonId);
+      if (anchorParents.length === 0) {
+        store.persons.splice(store.persons.findIndex((candidate) => candidate.id === person.id), 1);
+        response.status(422).json({
+          error: 'Add a parent for the existing person first, so the sibling can share them.',
+        });
+        return;
+      }
+      for (const parentId of anchorParents) addRelationship(parentId, person.id, 'biological-parent');
+    }
 
     recordActivity(store, {
       spaceId,

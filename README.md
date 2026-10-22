@@ -106,34 +106,68 @@ Fam Link answers this with an explicit authority hierarchy (profile owner → cu
 
 ## Repository status
 
-**Pre-alpha — specification stage.** This repository currently contains product documentation only; there is no application code yet.
+**Working demo.** The domain, API, and web client are implemented and runnable. The family in the
+demo is synthetic — no real family data belongs in this repository.
 
-```
-fam.link/
-├── README.md              ← you are here
-└── docs/
-    ├── PRD.md             ← product requirements
-    └── MVP-FEATURES.md    ← Phase 1 scope and acceptance criteria
-```
+### Run it
 
-As implementation begins, this repository is expected to grow to roughly:
-
-```
-apps/web/                  web application
-packages/domain/           persons, relationships, derivation, relationship calculator
-packages/graph/            traversal, path finding, LCA, duplicate detection
-packages/ui/               shared components incl. the tree visualiser
-docs/adr/                  architecture decision records
+```bash
+npm install
+npm run dev        # API on :8787, web on :5173 (proxies /api)
+npm test           # 81 tests across domain, API, and layout
+npm run typecheck
 ```
 
-The proposed stack will be recorded as ADRs before the first line of production code. Nothing is fixed yet except two architectural constraints from the PRD:
+Open the web app and pick a demo account. Each persona sees a different amount of the same family,
+because privacy is enforced per field on the server:
 
-- **The domain model is a graph, not a tree.** Cycle-safe traversals, multi-path relationships, and multiple lowest common ancestors must be handled from day one.
-- **Relationship derivation lives in the domain layer**, not the UI. The tree view and the relationship calculator must compute from the same source of truth.
+| Demo account | Role | What they see |
+|---|---|---|
+| Ayesha Khan | Family administrator | Everything, resolves proposals and duplicates |
+| Bilal Khan | Contributor (has claimed his own profile) | His branch, his own private fields, proposals awaiting approval |
+| Sadia Khan | Contributor | Her branch; other living relatives' birth dates are withheld |
+| Ahmed Khan | Contributor (eldest generation) | His own profile and descendants |
 
-### Local development
+Try: open **Relationship**, pick Bilal and Sara, and read the answer. Then open **Invitations** and
+open the pending invitation to Nadeem — the link shows only first names and the relationship, and
+accepting it *claims* the existing person rather than creating a second one.
 
-No setup required yet — there is nothing to run. Once the application scaffold lands, this section will contain install, environment, database, and test instructions.
+### What exists
+
+```
+packages/domain/     pure domain logic — graph, derivation, calculator, privacy, authority, duplicates
+apps/api/            JSON-backed repository, seed family, HTTP API, privacy projection per request
+apps/web/            React + Vite client: tree, people, calculator, invitations, activity, invite page
+docs/                PRD, MVP scope, ADRs
+PROGRESS.md          step-by-step build log and feature checklist
+```
+
+Implemented: family graph with derived siblings; focus-window tree with zoom, pan, and generation
+expansion; an accessible outline fallback; people search across names and scripts; profile editing
+that routes protected fields into proposals; claiming; invitations with relationship-carrying copy;
+relationship calculator with path, common ancestor, and Urdu kinship terms; duplicate detection with
+explainable signals and merge; activity log; field-level privacy; minors, blocked users, separation,
+and export.
+
+Not implemented yet, and deliberately visible as gaps: real sign-in (demo personas stand in),
+email/WhatsApp *delivery* (links are generated, not sent), memories and voice recordings (Phase 2),
+notifications, and multi-space switching in the UI.
+
+### Where the docs are
+
+- [`AGENTS.md`](./AGENTS.md) — build commands, conventions, non-negotiable domain rules
+- [`GLOSSARY.md`](./GLOSSARY.md) — canonical vocabulary
+- [`PROGRESS.md`](./PROGRESS.md) — what is built, what is next, and what changed vs. plan
+- [`docs/adr/`](./docs/adr) — binding architectural decisions
+
+### Architectural constraints carried into code
+
+- **The domain model is a graph, not a tree.** Cycle-safe traversals, multi-path relationships, and
+  multiple lowest common ancestors are handled in `packages/domain`.
+- **Relationship derivation lives in the domain.** The tree view and the calculator read the same
+  graph; nothing about kinship is computed in a component.
+- **Privacy is a server-side projection.** A restricted field is absent from the API response, not
+  hidden by CSS.
 
 ## Roadmap
 
