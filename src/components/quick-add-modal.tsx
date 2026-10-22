@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { addFirstPersonAction, addRelativeAction } from "@/actions/persons";
 import { useToast } from "@/components/toaster";
 
@@ -106,6 +106,15 @@ export function QuickAddModal({
   const [pending, startTransition] = useTransition();
   const toast = useToast();
   const defaultGender = relation === "father" ? "m" : relation === "mother" ? "f" : undefined;
+
+  // Escape closes — the dialog answers the keyboard as readily as the mouse.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
     <div

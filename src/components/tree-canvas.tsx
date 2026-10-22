@@ -125,6 +125,8 @@ export function TreeCanvas({
     setView({ x: 0, y: 0, w: Math.max(layout.width, MIN_W) });
   }
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [modal, setModal] = useState<{ anchorId: string; relation: Relation } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [aspect, setAspect] = useState(0.6);
@@ -133,6 +135,20 @@ export function TreeCanvas({
     (x: number, y: number, w: number): View =>
       clampViewTo(x, y, w, aspect, contentBounds),
     [aspect, contentBounds],
+  );
+
+  /** Search result → pan the view so the person sits centre-stage. */
+  const locatePerson = useCallback(
+    (id: string) => {
+      const node = layout.nodes.find((n) => n.id === id);
+      if (!node) return;
+      const h = view.w * aspect;
+      setView(clampView(node.x - view.w / 2, node.y - h / 2, view.w));
+      setHighlightId(id);
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+      highlightTimer.current = setTimeout(() => setHighlightId(null), 2200);
+    },
+    [layout.nodes, view.w, aspect, clampView],
   );
 
   useEffect(() => {
@@ -150,6 +166,12 @@ export function TreeCanvas({
   const fit = useCallback(() => {
     setView({ x: 0, y: 0, w: Math.max(layout.width, MIN_W) });
   }, [layout.width]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    };
+  }, []);
 
   // Zoom (wheel, non-passive so we can preventDefault)
   useEffect(() => {
@@ -247,6 +269,9 @@ export function TreeCanvas({
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          {persons.length > 5 && (
+            <TreeSearch persons={persons} onLocate={locatePerson} />
+          )}
           {!readOnly && headerExtra}
           {!readOnly && importHref && (
             <a
@@ -358,6 +383,7 @@ export function TreeCanvas({
                 y={n.y}
                 isFocus={n.id === focusPersonId}
                 hovered={hoverId === n.id}
+                flash={highlightId === n.id}
                 readOnly={readOnly}
                 onHover={setHoverId}
                 onQuickAdd={(relation) => setModal({ anchorId: n.id, relation })}
@@ -437,6 +463,84 @@ function Edges({
   );
 }
 
+/** Find-someone search: type a name, jump to the person. */
+function TreeSearch({
+  persons,
+  onLocate,
+}: {
+  persons: CanvasPerson[];
+  onLocate: (id: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const results = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (needle === "") return [];
+    return persons
+      .filter((p) => !p.redacted)
+      .filter((p) => displayName(p).toLowerCase().includes(needle))
+      .slice(0, 8);
+  }, [q, persons]);
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="search"
+        value={q}
+        placeholder="Find someone…"
+        aria-label="Find someone in this tree"
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          // let the result button's click land before the dropdown closes
+          window.setTimeout(() => setOpen(false), 150);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setQ("");
+            inputRef.current?.blur();
+          } else if (e.key === "Enter" && results.length > 0) {
+            onLocate(results[0].id);
+            setOpen(false);
+            inputRef.current?.blur();
+          }
+        }}
+        className="h-8 w-32 rounded-lg border border-line bg-paper px-2.5 text-xs text-ink placeholder:text-ink-soft/60 focus:border-evergreen focus:outline-none sm:w-44"
+      />
+      {open && results.length > 0 && (
+        <div className="shadow-float absolute right-0 top-9 z-40 w-60 rounded-xl border border-line bg-card p-1.5">
+          {results.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              // keep focus off the button until clicked, so blur timing is ours
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onLocate(p.id);
+                setOpen(false);
+              }}
+              className="block w-full rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-evergreen-mist"
+            >
+              <span className="block truncate text-xs font-medium text-ink">
+                {displayName(p)}
+              </span>
+              <span className="block truncate text-[10px] text-ink-soft">
+                {lifeLine(p)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PersonNode({
   treeId,
   person,
@@ -444,6 +548,7 @@ function PersonNode({
   y,
   isFocus,
   hovered,
+  flash = false,
   readOnly = false,
   onHover,
   onQuickAdd,
@@ -454,6 +559,8 @@ function PersonNode({
   y: number;
   isFocus: boolean;
   hovered: boolean;
+  /** Briefly ring this person (search "found them" moment). */
+  flash?: boolean;
   readOnly?: boolean;
   onHover: (id: string | null) => void;
   onQuickAdd: (relation: Relation) => void;
@@ -466,11 +573,15 @@ function PersonNode({
   const left = x - NODE_W / 2;
   const top = y - NODE_H / 2;
 
-  const pills: { label: string; relation: Relation; dx: number }[] = [
-    { label: "+ father", relation: "father", dx: -132 },
-    { label: "+ mother", relation: "mother", dx: -66 },
-    { label: "+ spouse", relation: "spouse", dx: 0 },
-    { label: "+ child", relation: "child", dx: 66 },
+  // Quick-add pills sit in a compact 2×2 grid directly above the card,
+  // within its width — the cursor can always reach them without leaving
+  // the hover region (the old single row stuck out ~100 units past the
+  // hit area and vanished mid-travel).
+  const pills: { label: string; relation: Relation; x: number; y: number }[] = [
+    { label: "+ father", relation: "father", x: 8, y: -52 },
+    { label: "+ mother", relation: "mother", x: 88, y: -52 },
+    { label: "+ spouse", relation: "spouse", x: 8, y: -26 },
+    { label: "+ child", relation: "child", x: 88, y: -26 },
   ];
 
   const card = (
@@ -521,12 +632,40 @@ function PersonNode({
       onMouseEnter={() => onHover(person.id)}
       onMouseLeave={() => onHover(null)}
     >
-      {/* hover hit area larger than the card */}
-      <rect x={-10} y={-34} width={NODE_W + 20} height={NODE_H + 68} fill="transparent" />
+      {/* Resting hit area: the card plus a small margin — narrow enough
+          never to steal hover from a neighbouring card (couple gap is 24). */}
+      <rect x={-12} y={-20} width={NODE_W + 24} height={NODE_H + 48} fill="transparent" />
+      {/* While hovered, an invisible halo bridges the card and everything
+          that appeared because of the hover (pills above, center button
+          below), so moving toward a control never drops the hover. It
+          renders before the card so card clicks still land on the link. */}
+      {hovered && !readOnly && (
+        <rect
+          x={-16}
+          y={-58}
+          width={NODE_W + 32}
+          height={NODE_H + 106}
+          fill="transparent"
+        />
+      )}
       {readOnly ? (
         <g>{card}</g>
       ) : (
         <a href={`/app/trees/${treeId}/person/${person.id}`}>{card}</a>
+      )}
+
+      {flash && (
+        <rect
+          className="node-flash"
+          x={-7}
+          y={-7}
+          width={NODE_W + 14}
+          height={NODE_H + 14}
+          rx={19}
+          fill="none"
+          stroke="var(--color-gold)"
+          strokeWidth={3}
+        />
       )}
 
       {hovered && !readOnly && (
@@ -537,8 +676,8 @@ function PersonNode({
               role="button"
               tabIndex={0}
               aria-label={`Add ${pill.relation} to ${name}`}
-              transform={`translate(${NODE_W / 2 + pill.dx - 30}, -30)`}
-              className="cursor-pointer"
+              transform={`translate(${pill.x}, ${pill.y})`}
+              className="q-pill cursor-pointer"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -551,20 +690,8 @@ function PersonNode({
                 }
               }}
             >
-              <rect
-                width={60}
-                height={21}
-                rx={10.5}
-                fill="var(--color-evergreen)"
-                stroke="none"
-              />
-              <text
-                x={30}
-                y={14.5}
-                textAnchor="middle"
-                fontSize={10}
-                fill="var(--color-paper)"
-              >
+              <rect width={76} height={24} rx={12} />
+              <text x={38} y={15.5} textAnchor="middle" fontSize={10.5} fontWeight={500}>
                 {pill.label}
               </text>
             </g>
