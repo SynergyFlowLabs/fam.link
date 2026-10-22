@@ -6,6 +6,11 @@
   Grounded in the subject: a family TREE — evergreen and pine, aged paper,
   heirloom gold used sparingly, rosewood to mark a life ended.
   Deliberately NOT the cream + terracotta default.
+
+  Radius hierarchy encodes meaning: containers are generous (rounded-2xl+),
+  controls are modest (rounded-lg), chips are pills.
+  Elevation encodes meaning: paper and cards sit flat with borders; only
+  floating layers (menus, modals) get the warm heirloom shadow.
 */
 @theme {
   --color-paper: #f8f6f1;
@@ -35,10 +40,18 @@ html {
 }
 
 body {
-  background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* Aged paper: a faint evergreen wash from above + a whisper of grain. */
+  background-color: var(--color-paper);
+  background-image:
+    radial-gradient(
+      1100px 520px at 50% -8%,
+      rgba(47, 93, 80, 0.055),
+      transparent 62%
+    ),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.022'/%3E%3C/svg%3E");
 }
 
 ::selection {
@@ -50,6 +63,148 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-evergreen);
   outline-offset: 2px;
+}
+
+/* Thin, unobtrusive scrollbars that match the paper */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+@layer components {
+  /* ---- Controls ------------------------------------------------------- */
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.625rem;
+    background: var(--color-evergreen);
+    padding: 0.625rem 1.25rem;
+    font-weight: 500;
+    color: var(--color-paper);
+    transition: background-color 0.15s ease;
+  }
+  .btn-primary:hover {
+    background: var(--color-evergreen-deep);
+  }
+  .btn-primary:disabled {
+    opacity: 0.55;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.625rem;
+    border: 1px solid var(--color-line);
+    padding: 0.625rem 1.25rem;
+    font-weight: 500;
+    color: var(--color-ink);
+    background: transparent;
+    transition:
+      border-color 0.15s ease,
+      color 0.15s ease;
+  }
+  .btn-secondary:hover {
+    border-color: var(--color-evergreen);
+    color: var(--color-evergreen);
+  }
+  .btn-secondary:disabled {
+    opacity: 0.55;
+  }
+
+  .input {
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-line);
+    background: var(--color-card);
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--color-ink);
+    transition: border-color 0.15s ease;
+  }
+  .input::placeholder {
+    color: color-mix(in srgb, var(--color-ink-soft) 55%, transparent);
+  }
+  .input:focus {
+    border-color: var(--color-evergreen);
+    outline: none;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 9999px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  /* Only floating layers cast the warm heirloom shadow. */
+  .shadow-float {
+    box-shadow:
+      0 1px 2px rgba(28, 36, 32, 0.05),
+      0 12px 32px rgba(28, 36, 32, 0.1);
+  }
+
+  /* ---- The one orchestrated moment: the hero tree draws itself in ------ */
+
+  .tree-draw line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: tree-draw-line 0.7s cubic-bezier(0.33, 1, 0.68, 1) forwards;
+  }
+  .tree-draw .tree-node {
+    opacity: 0;
+    animation: tree-soft-appear 0.45s ease-out forwards;
+  }
+
+  /* ---- Tree canvas ----------------------------------------------------- */
+
+  /* A person card gains a soft shadow while pointed at — the canvas
+     answering the hand, nothing more. */
+  .tnode-card {
+    transition: filter 0.15s ease;
+  }
+  g[data-node]:hover .tnode-card {
+    filter: drop-shadow(0 2px 5px rgba(28, 36, 32, 0.16));
+  }
+
+  /* Motion that answers an action: the quick-add dialog. */
+  .dialog-surface {
+    animation: dialog-enter 0.18s cubic-bezier(0.2, 0.9, 0.4, 1);
+  }
+  .dialog-backdrop {
+    animation: backdrop-enter 0.18s ease-out;
+  }
+}
+
+@keyframes tree-draw-line {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes tree-soft-appear {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+}
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

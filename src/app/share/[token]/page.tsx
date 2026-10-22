@@ -21,14 +21,15 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { token } = await params;
   const link = await getShareLinkByToken(token);
-  if (!link) return { title: "Shared tree · fam.link" };
+  if (!link) return { title: "Shared tree" };
   const rows = await db
     .select({ name: trees.name })
     .from(trees)
     .where(eq(trees.id, link.treeId))
     .limit(1);
+  // the root layout template appends "· fam.link" — don't double it
   return {
-    title: `${rows[0]?.name ?? "Shared tree"} · fam.link`,
+    title: rows[0]?.name ?? "Shared tree",
     robots: { index: false, follow: false },
   };
 }

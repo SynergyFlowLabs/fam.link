@@ -15,15 +15,37 @@ export function TreeCard({
   updated: string;
 }) {
   return (
-    <div className="group relative rounded-2xl border border-line bg-paper p-5 transition-colors hover:border-evergreen/50">
-      <Link href={`/app/trees/${id}`} className="block">
-        <h2 className="font-display text-lg font-semibold text-ink group-hover:text-evergreen">
-          {name}
-        </h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          {people} {people === 1 ? "person" : "people"}
-        </p>
-        <p className="mt-0.5 text-xs text-ink-soft/80">Updated {updated}</p>
+    <div className="group relative rounded-2xl border border-line bg-card p-5 transition-colors hover:border-evergreen/60">
+      <Link href={`/app/trees/${id}`} className="flex items-start gap-4">
+        <span
+          aria-hidden
+          className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-evergreen-mist"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-5.5 w-5.5 text-evergreen"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            aria-hidden
+          >
+            <path d="M12 21v-8" />
+            <path d="M12 13c0-3.5 2.5-6 6-6 0 3.5-2.5 6-6 6Z" />
+            <path d="M12 13C12 9.5 9.5 7 6 7c0 3.5 2.5 6 6 6Z" />
+          </svg>
+        </span>
+        <span className="block min-w-0">
+          <span className="block truncate font-display text-lg font-semibold text-ink transition-colors group-hover:text-evergreen">
+            {name}
+          </span>
+          <span className="mt-1 block text-sm text-ink-soft">
+            {people} {people === 1 ? "person" : "people"}
+          </span>
+          <span className="mt-0.5 block text-xs text-ink-soft/80">
+            Updated {updated}
+          </span>
+        </span>
       </Link>
 
       <details className="absolute right-3 top-3">
@@ -33,7 +55,7 @@ export function TreeCard({
         >
           ⋯
         </summary>
-        <div className="absolute right-0 top-9 z-10 w-48 rounded-xl border border-line bg-white p-3 shadow-sm">
+        <div className="shadow-float absolute right-0 top-9 z-10 w-48 rounded-xl border border-line bg-card p-3">
           <form action={renameTreeAction} className="flex flex-col gap-2">
             <input type="hidden" name="treeId" value={id} />
             <input
@@ -43,11 +65,11 @@ export function TreeCard({
               maxLength={80}
               defaultValue={name}
               aria-label="Rename tree"
-              className="rounded-md border border-line px-2.5 py-1.5 text-sm focus:border-evergreen focus:outline-none"
+              className="input py-1.5 text-sm"
             />
             <button
               type="submit"
-              className="rounded-md border border-line px-2.5 py-1.5 text-sm text-ink transition-colors hover:border-evergreen hover:text-evergreen"
+              className="btn-secondary py-1.5 text-sm"
             >
               Rename
             </button>
@@ -67,7 +89,7 @@ export function TreeCard({
             <input type="hidden" name="treeId" value={id} />
             <button
               type="submit"
-              className="w-full rounded-md px-2.5 py-1.5 text-left text-sm text-rosewood transition-colors hover:bg-rosewood-mist"
+              className="w-full rounded-lg px-2.5 py-1.5 text-left text-sm text-rosewood transition-colors hover:bg-rosewood-mist"
             >
               Delete tree…
             </button>
