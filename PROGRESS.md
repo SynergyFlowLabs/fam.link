@@ -309,6 +309,23 @@ against the running API that muting `claims` leaves `safety` enabled and the saf
 
 ---
 
+### Step 15 — Per-node branch collapse ✅
+
+- A small control on the edge of any card that has descendants folds that branch away, showing how
+  many people are hidden (`+4`); pressing it again restores them.
+- Partners are not descendants: folding a person keeps their spouse on screen, which is what makes
+  the folded card readable.
+- Collapse is a view state, not a data change — nothing is deleted, no request is made, and folding a
+  parent whose child is also folded leaves one coherent result rather than resurrecting a card.
+- Rules live in `apps/web/src/tree/collapse.ts` with six tests; the card became a `role="button"` div
+  so the fold control is a sibling rather than an invalid nested button, and Enter/Space now select a
+  card explicitly since a div has no implicit activation.
+- `.node-fold` and focus-visible styles added so the control is reachable by keyboard.
+
+**Verification:** **147 tests passing**, typecheck clean, web build 303 kB (91 kB gzip).
+
+---
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.
@@ -321,7 +338,7 @@ Ordered by the MVP's actual question — *will relatives collaborate?* — not b
 | 4 | ~~Merge reversal from the merge log~~ | F-8.3 | ✅ Step 10 |
 | 5 | Delivery outbox (email/WhatsApp) for notifications | F-9.3 | Preferences shipped in Step 14; sending still needs an idempotent outbox (ADR 0004) |
 | 6 | Full localisation of screen bodies, dialogs, invite copy | F-9.2 | Shell and tree are done; the rest is English |
-| 7 | Per-node branch collapse | F-3.3 | Keyboard navigation shipped in Step 13; collapsing a single branch is still pending |
+| 7 | ~~Per-node branch collapse~~ | F-3.3 | ✅ Step 15 |
 | 8 | Cross-space person linking and a space switcher | post-MVP (D-2) | Needed once a user belongs to paternal, maternal and in-law spaces |
 | 9 | ~~Tree health summary (missing dates, detached branches, open disputes)~~ | F-9.5 | ✅ Step 11 |
 | 10 | Phase 2: memories, photographs beyond one per person, voice recordings, timeline | E9 | Only after the loop is proven |

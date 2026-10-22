@@ -12,6 +12,7 @@ import { useAsync } from '../hooks.js';
 import { useLocale } from '../i18n.js';
 import { CARD_HEIGHT, CARD_WIDTH, layoutTree } from '../tree/layout.js';
 import { nextNodeId } from '../tree/navigate.js';
+import { hiddenByCollapse, hiddenCounts } from '../tree/collapse.js';
 
 /**
  * The tree view is the product's front door. It renders only the focus window the API sends and
@@ -39,9 +40,10 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
   const [outline, setOutline] = useState(false);
   const [detailed, setDetailed] = useState(true);
   const [treeSearch, setTreeSearch] = useState('');
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const dragging = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const canvas = useRef<HTMLDivElement>(null);
-  const nodeRefs = useRef(new Map<string, HTMLButtonElement>());
+  const nodeRefs = useRef(new Map<string, HTMLElement>());
   const [keyboardHint, setKeyboardHint] = useState(false);
 
   useEffect(() => {
@@ -76,10 +78,23 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
     });
   }, [tree.data]);
 
-  const layout = useMemo(
-    () => (tree.data ? layoutTree(tree.data.nodes, tree.data.edges, tree.data.focusId) : null),
+  const hiddenIds = useMemo(
+    () => (tree.data ? hiddenByCollapse(tree.data.edges, collapsed) : new Set<string>()),
+    [tree.data, collapsed],
+  );
+  const foldCounts = useMemo(
+    () => (tree.data ? hiddenCounts(tree.data.edges, tree.data.nodes.map((node) => node.id)) : new Map<string, number>()),
     [tree.data],
   );
+
+  const layout = useMemo(() => {
+    if (!tree.data) return null;
+    const nodes = tree.data.nodes.filter((node) => !hiddenIds.has(node.id));
+    const edges = tree.data.edges.filter(
+      (edge) => !hiddenIds.has(edge.toPersonId) && !hiddenIds.has(edge.fromPersonId),
+    );
+    return layoutTree(nodes, edges, tree.data.focusId);
+  }, [tree.data, hiddenIds]);
 
   if (tree.loading && !tree.data) return <div className="card muted">Opening the family tree…</div>;
   if (tree.error) return <Notice tone="danger">{tree.error}</Notice>;
@@ -248,13 +263,14 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
               const person = people.get(positioned.id);
               if (!person) return null;
               return (
-                <button
-                  type="button"
+                <div
                   key={positioned.id}
                   ref={(element) => {
                     if (element) nodeRefs.current.set(person.id, element);
                     else nodeRefs.current.delete(person.id);
                   }}
+                  role="button"
+                  tabIndex={0}
                   className={`node${person.id === tree.data!.focusId ? ' node--focus' : ''}${
                     person.livingStatus === 'deceased' ? ' node--deceased' : ''
                   }`}
@@ -288,6 +304,11 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
                     if (event.key === 'Enter' && event.shiftKey) {
                       event.preventDefault();
                       onFocus(person.id);
+                      return;
+                    }
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelect(person.id);
                     }
                   }}
                   aria-label={`${displayName(person)}, ${person.relationshipToViewer ?? 'relative'}. Select for details.`}
@@ -303,10 +324,43 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
                   </span>
                   {person.isMinor ? <span className="node__badge">minor</span> : null}
                   {person.claimed ? null : <span className="visually-hidden">Unclaimed profile</span>}
-                </button>
+                </div>
               );
             })}
           </div>
+
+          {[...layout.nodes.entries()].map(([id, positioned]) => {
+            const count = foldCounts.get(id) ?? 0;
+            if (count === 0) return null;
+            const person = people.get(id);
+            if (!person) return null;
+            const isCollapsed = collapsed.has(id);
+            return (
+              <button
+                key={`fold-${id}`}
+                type="button"
+                className="node-fold"
+                style={{ left: positioned.x + CARD_WIDTH - 26, top: positioned.y + CARD_HEIGHT - 12 }}
+                aria-expanded={!isCollapsed}
+                aria-label={
+                  isCollapsed
+                    ? `Show ${count} people below ${displayName(person)}`
+                    : `Hide ${count} people below ${displayName(person)}`
+                }
+                title={isCollapsed ? 'Show this branch' : 'Hide this branch'}
+                onClick={() => {
+                  setCollapsed((current) => {
+                    const next = new Set(current);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  });
+                }}
+              >
+                {isCollapsed ? `+${count}` : '−'}
+              </button>
+            );
+          })}
 
           <div className="tree-toolbar">
             <button

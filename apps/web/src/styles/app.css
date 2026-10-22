@@ -900,3 +900,33 @@ a {
   outline: 2px solid var(--focus, var(--brass));
   outline-offset: 2px;
 }
+
+/* Branch collapse control: sits on the card edge, but is a sibling of the card so neither
+   interactive element is nested inside the other. */
+.node-fold {
+  position: absolute;
+  z-index: 2;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.node-fold:hover {
+  border-color: var(--verdigris);
+  color: var(--verdigris-dark);
+}
+
+.node-fold:focus-visible,
+.node:focus-visible {
+  outline: 2px solid var(--focus, var(--brass));
+  outline-offset: 2px;
+}
