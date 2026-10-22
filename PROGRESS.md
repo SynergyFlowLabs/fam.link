@@ -29,7 +29,7 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 
 | # | Step | Status |
 |---|------|--------|
-| 1.1 | Tree canvas: SVG renderer, pan/zoom, bespoke family layout engine | ⬜ |
+| 1.1 | Tree canvas: SVG renderer, pan/zoom, bespoke family layout engine | 🚧 |
 | 1.2 | Quick-add: +father / +mother / +spouse / +child from any node, keyboard-friendly | ⬜ |
 | 1.3 | Unknown placeholders + fuzzy dates/places in all capture forms | ⬜ |
 | 1.4 | Person profile page: facts, edit, relationships | ⬜ |
@@ -71,3 +71,4 @@ Public deceased profiles, API, family book generation, governance. Not started.
 - **2026-10-22 — Step 0.5:** Drizzle schema + SQLite (WAL, FKs on) for users, sessions, trees, persons, unions, parent_child, media, memories. DAG-safe: children attach to unions, partnerB nullable, fuzzy date text columns, unknown-name persons legal. `data/` gitignored.
 - **2026-10-22 — Step 0.6:** Auth: async scrypt password hashing, sessions stored as sha256(token) with httpOnly/sameSite cookies, signup/signin/signout server actions, /app route guard, auth pages. Signup auto-seeds a tree with the user as root person (activation).
 - **2026-10-22 — Step 0.7:** Landing page (SVG mini-tree hero with fuzzy dates + unknown ancestor + whispered memory), dashboard with tree list, create/rename/delete (confirm-guarded), person counts, empty state. E2E-tested signup via server action POST: user + starter tree + root person created. Dev preview running on :3000.
+- **2026-10-22 — Step 1.1a:** Bespoke DAG-aware layout engine (`src/lib/layout/engine.ts`): focus-relative generations (fixpoint propagation), couple-units, family clustering + recentering. 12 unit tests green (`node --test`) covering pedigree collapse, in-laws, single parents, overlap-freedom, adjacency, centering, determinism.
