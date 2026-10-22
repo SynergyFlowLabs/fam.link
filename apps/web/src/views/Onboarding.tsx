@@ -105,7 +105,6 @@ export function Onboarding({
   };
 
   const body = () => {
-    const copy = COPY[step];
     switch (step) {
       case 'name':
         return (
@@ -167,7 +166,7 @@ export function Onboarding({
           </div>
         );
     }
-    return copy ? null : null;
+    return null;
   };
 
   const next = async () => {

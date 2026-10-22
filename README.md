@@ -147,7 +147,7 @@ expansion; an accessible outline fallback; people search across names and script
 that routes protected fields into proposals; claiming; invitations with relationship-carrying copy;
 relationship calculator with path, common ancestor, and Urdu kinship terms; duplicate detection with
 explainable signals and merge; activity log; field-level privacy; minors, blocked users, separation,
-and export.
+and export; a six-step guided onboarding that builds a real tree and ends with an invitation.
 
 Not implemented yet, and deliberately visible as gaps: real sign-in (demo personas stand in),
 email/WhatsApp *delivery* (links are generated, not sent), memories and voice recordings (Phase 2),

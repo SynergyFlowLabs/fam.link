@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { initials } from '../tree/layout.js';
 
 export function Avatar({
@@ -51,6 +51,14 @@ export function Dialog({
   onClose: () => void;
   actions?: ReactNode;
 }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return (
     <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
       <div className="dialog" onClick={(event) => event.stopPropagation()}>
