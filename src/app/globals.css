@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@import "@fontsource-variable/fraunces";
+
+/*
+  fam.link design tokens
+  Grounded in the subject: a family TREE — evergreen and pine, aged paper,
+  heirloom gold used sparingly, rosewood to mark a life ended.
+  Deliberately NOT the cream + terracotta default.
+*/
+@theme {
+  --color-paper: #f8f6f1;
+  --color-card: #fffdf8;
+  --color-paper-deep: #efece3;
+  --color-ink: #1c2420;
+  --color-ink-soft: #4a544e;
+  --color-line: #d9d4c5;
+
+  --color-evergreen: #2f5d50;
+  --color-evergreen-deep: #1e3d34;
+  --color-evergreen-mist: #e3ebe6;
+
+  --color-gold: #b98a2f;
+  --color-gold-mist: #f3ead2;
+
+  --color-rosewood: #96574f;
+  --color-rosewood-mist: #f0e2df;
+
+  --font-display: "Fraunces Variable", "Iowan Old Style", Georgia, serif;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-evergreen);
+  color: var(--color-paper);
+}
+
+/* Visible, consistent keyboard focus */
+:focus-visible {
+  outline: 2px solid var(--color-evergreen);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
