@@ -140,6 +140,8 @@ export interface Membership {
   readonly role: Exclude<Role, 'owner' | 'custodian'> | 'admin';
   readonly status: SpaceMembershipStatus;
   readonly joinedAt: string;
+  /** When this member last looked at their notifications. Drives the unread count. */
+  readonly notificationSeenAt?: string;
 }
 
 export interface FamilySpace {
@@ -231,6 +233,8 @@ export interface ActivityEntry {
   readonly summary: string;
   readonly before?: unknown;
   readonly after?: unknown;
+  /** The single field this entry changed, when it changed one field. Enables precise revert. */
+  readonly field?: string;
   readonly createdAt: string;
 }
 

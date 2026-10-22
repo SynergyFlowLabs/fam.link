@@ -19,6 +19,11 @@ import {
   canMerge,
   canManageMembers,
   canRequestSeparation,
+  canViewField,
+  conflictingProposals,
+  groupProposals,
+  planDecision,
+  planRevert,
   canSeePerson,
   calculateRelationship,
   descendantIds,
@@ -49,6 +54,7 @@ import {
   userById,
   type Store,
 } from './db.js';
+import { notificationsFor, unreadCount } from './notifications.js';
 
 /**
  * HTTP API.
@@ -628,6 +634,7 @@ export function createApp(): express.Express {
 
     const changes = request.body as Record<string, unknown> & { explanation?: string };
     const applied: Record<string, unknown> = {};
+    const previous: Record<string, unknown> = {};
     const proposed: Proposal[] = [];
     const refused: Array<{ field: string; reason: string }> = [];
 
@@ -639,6 +646,10 @@ export function createApp(): express.Express {
         continue;
       }
       if (decision.mode === 'proposal') {
+        const rival = conflictingProposals(
+          { id: 'pending', spaceId, personId: person.id, field, proposedValue: value },
+          store.proposals,
+        );
         const proposal: Proposal = {
           id: nextId(store, 'prop'),
           spaceId,
@@ -649,26 +660,53 @@ export function createApp(): express.Express {
           explanation: String(changes['explanation'] ?? 'Proposed change'),
           proposedByUserId: userId,
           createdAt: nowIso(),
-          status: 'proposed',
+          status: rival.length > 0 ? 'disputed' : 'proposed',
+          ...(rival.length > 0 ? { conflictingWith: rival.map((entry) => entry.id) } : {}),
         };
         store.proposals.push(proposal);
         proposed.push(proposal);
+
+        // Mark the rivals disputed too: both values are retained until someone decides.
+        for (const entry of rival) {
+          (entry as unknown as { status: string }).status = 'disputed';
+          (entry as unknown as { conflictingWith?: string[] }).conflictingWith = [
+            ...(entry.conflictingWith ?? []),
+            proposal.id,
+          ];
+        }
+        if (rival.length > 0) {
+          recordActivity(store, {
+            spaceId,
+            kind: 'proposal.created',
+            actorUserId: userId,
+            personId: person.id,
+            summary: `${displayName(person)}’s ${field} is now disputed between relatives`,
+            field,
+            after: value,
+          });
+        }
         continue;
       }
+      previous[field] = (person as unknown as Record<string, unknown>)[field];
       (person as unknown as Record<string, unknown>)[field] = value;
       applied[field] = value;
     }
 
     if (Object.keys(applied).length > 0) {
       (person as unknown as { updatedAt: string }).updatedAt = nowIso();
-      recordActivity(store, {
-        spaceId,
-        kind: 'person.updated',
-        actorUserId: userId,
-        personId: person.id,
-        summary: `${userById(store, userId)?.name ?? 'A member'} updated ${listPhrase(Object.keys(applied))} for ${displayName(person)}`,
-        after: applied,
-      });
+      // One entry per field: that is what makes a precise revert possible later.
+      for (const [field, value] of Object.entries(applied)) {
+        recordActivity(store, {
+          spaceId,
+          kind: 'person.updated',
+          actorUserId: userId,
+          personId: person.id,
+          summary: `${userById(store, userId)?.name ?? 'A member'} changed ${field} for ${displayName(person)}`,
+          field,
+          before: previous[field],
+          after: value,
+        });
+      }
     }
     for (const proposal of proposed) {
       recordActivity(store, {
@@ -1177,6 +1215,10 @@ export function createApp(): express.Express {
     (proposal as unknown as { decidedAt: string }).decidedAt = nowIso();
 
     if (outcome === 'accept') {
+      const plan = planDecision(proposal, store.proposals.filter((entry) => entry.spaceId === spaceId), 'accept');
+      for (const superseded of plan.superseded) {
+        (superseded as unknown as { status: string }).status = 'superseded';
+      }
       (person as unknown as Record<string, unknown>)[proposal.field] = proposal.proposedValue;
       (person as unknown as { updatedAt: string }).updatedAt = nowIso();
     }
@@ -1315,6 +1357,142 @@ export function createApp(): express.Express {
   });
 
   // ---------------------------------------------------------------- activity, export, health
+
+  app.get('/api/spaces/:spaceId/notifications', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, userId } = ctx as Required<Context>;
+    const notifications = notificationsFor(store, spaceId, userId);
+    response.json({ notifications, unread: unreadCount(store, spaceId, userId, notifications) });
+  });
+
+  app.post('/api/spaces/:spaceId/notifications/seen', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, userId } = ctx as Required<Context>;
+    const membership = membershipFor(store, spaceId, userId);
+    if (membership) {
+      (membership as unknown as { notificationSeenAt: string }).notificationSeenAt = nowIso();
+      saveStore();
+    }
+    response.json({ ok: true });
+  });
+
+  app.get('/api/spaces/:spaceId/disputes', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor, viewer } = ctx as Required<Context>;
+    const graph = spaceGraph(store, spaceId);
+    const index = indexGraph(graph);
+    const groups = groupProposals(store.proposals.filter((proposal) => proposal.spaceId === spaceId))
+      .filter((group) => {
+        const person = index.persons.get(group.personId);
+        return person ? canSeePerson(index, viewer, person) : false;
+      })
+      .map((group) => {
+        const person = index.persons.get(group.personId)!;
+        return {
+          ...group,
+          person: projectPerson(index, viewer, person),
+          canResolve: actor ? canDecideProposal(actor, group.proposals[0]!, person).allowed : false,
+          proposals: group.proposals.map((proposal) => ({
+            ...proposal,
+            proposedBy: userById(store, proposal.proposedByUserId)?.name ?? 'A relative',
+            previousValue:
+              canViewField(index, viewer, person, proposal.field) ? proposal.previousValue : undefined,
+          })),
+        };
+      });
+
+    response.json({ disputes: groups });
+  });
+
+  app.post('/api/spaces/:spaceId/activity/:activityId/revert', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor, userId, viewer } = ctx as Required<Context>;
+    const entry = store.activity.find(
+      (candidate) => candidate.id === request.params.activityId && candidate.spaceId === spaceId,
+    );
+    if (!entry || !entry.personId || !actor) {
+      response.status(404).json({ error: 'Change not found.' });
+      return;
+    }
+    const person = findPerson(store, spaceId, entry.personId);
+    if (!person || !canSeePerson(indexGraph(spaceGraph(store, spaceId)), viewer, person)) {
+      response.status(404).json({ error: 'Change not found.' });
+      return;
+    }
+    const plan = planRevert(entry, person);
+    if (!plan || !plan.field) {
+      response.status(422).json({ error: 'This change cannot be reverted because its previous value was not recorded.' });
+      return;
+    }
+    const decision = canEditField(actor, person, plan.field);
+    if (!decision.allowed || decision.mode === 'proposal') {
+      response.status(403).json({ error: decision.allowed ? 'Reverting this field needs the owner’s approval.' : decision.reason });
+      return;
+    }
+
+    const currentValue = (person as unknown as Record<string, unknown>)[plan.field];
+    (person as unknown as Record<string, unknown>)[plan.field] = plan.value;
+    (person as unknown as { updatedAt: string }).updatedAt = nowIso();
+
+    recordActivity(store, {
+      spaceId,
+      kind: 'person.updated',
+      actorUserId: userId,
+      personId: person.id,
+      summary: `${userById(store, userId)?.name ?? 'A member'} reverted ${plan.field} for ${displayName(person)}`,
+      field: plan.field,
+      before: currentValue,
+      after: plan.value,
+    });
+    saveStore();
+    response.json({ ok: true, person: projectPerson(indexGraph(spaceGraph(store, spaceId)), viewer, person) });
+  });
+
+  app.post('/api/spaces/:spaceId/reports', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, userId } = ctx as Required<Context>;
+    const body = request.body as { personId?: string; reason?: string };
+    if (!body.reason?.trim()) {
+      response.status(400).json({ error: 'Tell us what is wrong so it can be reviewed.' });
+      return;
+    }
+    store.reports.push({
+      id: nextId(store, 'report'),
+      spaceId,
+      personId: body.personId,
+      reportedByUserId: userId,
+      reason: body.reason.trim(),
+      status: 'open',
+      createdAt: nowIso(),
+    });
+    saveStore();
+    response.status(201).json({ ok: true });
+  });
 
   app.get('/api/spaces/:spaceId/activity', (request, response) => {
     const spaceId = request.params.spaceId!;

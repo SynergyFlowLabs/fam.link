@@ -84,6 +84,37 @@ export interface ActivityEntry {
   createdAt: string;
   actor?: { name: string };
   personId?: string;
+  field?: string;
+  before?: unknown;
+  after?: unknown;
+}
+
+export interface Notification {
+  id: string;
+  kind: string;
+  title: string;
+  detail?: string;
+  createdAt: string;
+  personId?: string;
+  action?: string;
+}
+
+export interface DisputeGroup {
+  personId: string;
+  field: string;
+  disputed: boolean;
+  canResolve: boolean;
+  person: PersonView;
+  proposals: Array<{
+    id: string;
+    field: string;
+    proposedValue: unknown;
+    previousValue?: unknown;
+    explanation: string;
+    proposedBy: string;
+    status: string;
+    createdAt: string;
+  }>;
 }
 
 export interface Invitation {
@@ -215,6 +246,18 @@ export const api = {
     call<{ ok: true }>(`/api/spaces/${spaceId}/duplicates/dismiss`, {
       method: 'POST',
       body: JSON.stringify({ personId, candidateId }),
+    }),
+  notifications: (spaceId: string) =>
+    call<{ notifications: Notification[]; unread: number }>(`/api/spaces/${spaceId}/notifications`),
+  markNotificationsSeen: (spaceId: string) =>
+    call<{ ok: true }>(`/api/spaces/${spaceId}/notifications/seen`, { method: 'POST', body: '{}' }),
+  disputes: (spaceId: string) => call<{ disputes: DisputeGroup[] }>(`/api/spaces/${spaceId}/disputes`),
+  revertActivity: (spaceId: string, activityId: string) =>
+    call<{ ok: true }>(`/api/spaces/${spaceId}/activity/${activityId}/revert`, { method: 'POST', body: '{}' }),
+  report: (spaceId: string, personId: string, reason: string) =>
+    call<{ ok: true }>(`/api/spaces/${spaceId}/reports`, {
+      method: 'POST',
+      body: JSON.stringify({ personId, reason }),
     }),
   separate: (spaceId: string, personId: string, reason?: string) =>
     call<{ ok: true }>(`/api/spaces/${spaceId}/people/${personId}/separate`, {

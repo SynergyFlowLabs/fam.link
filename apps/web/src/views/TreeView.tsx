@@ -659,7 +659,24 @@ export function ProfilePanel({ spaceId, personId, onFocus, onSelect, onAddRelati
           </div>
         ) : null}
 
-        {permissions.canRequestSeparation ? (
+        <div className="row__actions">
+          <button
+            type="button"
+            className="btn btn--quiet small"
+            onClick={async () => {
+              const reason = window.prompt('What should an administrator know about this profile?');
+              if (!reason) return;
+              try {
+                await api.report(spaceId, personId, reason);
+                setMessage({ tone: 'ok', text: 'Reported. An administrator will review it.' });
+              } catch (error) {
+                setMessage({ tone: 'danger', text: error instanceof Error ? error.message : 'Could not send the report.' });
+              }
+            }}
+          >
+            Report a problem
+          </button>
+          {permissions.canRequestSeparation ? (
           <button
             type="button"
             className="btn btn--danger small"
@@ -670,9 +687,10 @@ export function ProfilePanel({ spaceId, personId, onFocus, onSelect, onAddRelati
               profile.reload();
             }}
           >
-            Request separation from this tree
-          </button>
-        ) : null}
+              Request separation from this tree
+            </button>
+          ) : null}
+        </div>
       </div>
     </aside>
   );

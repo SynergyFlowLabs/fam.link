@@ -275,6 +275,7 @@ export function seedStore(): Store {
     invitations,
     hiddenBranches,
     dismissedDuplicates,
+    reports: [],
     nextId: 1,
   };
 }

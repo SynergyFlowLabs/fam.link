@@ -7,6 +7,7 @@ import {
   type PersonView,
   type SessionResponse,
 } from './api.js';
+import { NotificationBell } from './components/NotificationBell.js';
 import { Dialog, Field, Notice } from './components/ui.js';
 import { useAsync, useRoute } from './hooks.js';
 import { ActivityView } from './views/ActivityView.js';
@@ -154,6 +155,7 @@ export default function App() {
                 </option>
               ))}
             </select>
+            <NotificationBell spaceId={activeSpaceId} onNavigate={(next) => route.navigate(next === 'proposals' ? 'activity' : next)} />
             <button type="button" className="btn btn--quiet" onClick={() => setNewSpaceOpen(true)}>
               New family
             </button>

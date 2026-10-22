@@ -37,6 +37,16 @@ export interface DismissedDuplicate {
   readonly dismissedAt: string;
 }
 
+export interface Report {
+  readonly id: Id;
+  readonly spaceId: Id;
+  readonly personId?: Id;
+  readonly reportedByUserId: Id;
+  readonly reason: string;
+  readonly status: 'open' | 'resolved';
+  readonly createdAt: string;
+}
+
 export interface Store {
   users: User[];
   spaces: FamilySpace[];
@@ -48,6 +58,7 @@ export interface Store {
   invitations: Invitation[];
   hiddenBranches: HiddenBranch[];
   dismissedDuplicates: DismissedDuplicate[];
+  reports: Report[];
   nextId: number;
 }
 

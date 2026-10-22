@@ -11,4 +11,5 @@ export * from './relationships.js';
 export * from './privacy.js';
 export * from './authority.js';
 export * from './duplicates.js';
+export * from './proposals.js';
 export * from './search.js';

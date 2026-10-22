@@ -124,6 +124,25 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 5 — Disputes, revert, notifications, abuse reports ✅
+
+**Goal:** make disagreement safe. This is the difference between a family tool and a form.
+
+**Shipped**
+- `packages/domain/src/proposals.ts` — conflict detection on live proposals, grouping by field, dispute descriptions, decision plans that supersede rival claims, and revert plans derived from the activity log. Value comparison is structural (`JSON.stringify`), so partial dates compare by content rather than identity.
+- API: conflicting proposals now mark **both** sides `disputed`, retain both values, and log the dispute. Accepting one supersedes the others. Every applied field writes its own activity entry with `field`, `before`, and `after`, which makes **precise revert** possible: `POST /activity/:id/revert` restores the prior value and records the revert as a new change rather than erasing history.
+- `notifications.ts` — notifications are **derived from state**, not stored, so they cannot drift from the tree and a recipient can never be told about a person they cannot see. Categories: proposals awaiting your decision, decisions on your proposals, invitation opens/accepts, claims, separations, new members, duplicate candidates. Unread is tracked per membership.
+- New routes: `/notifications`, `/notifications/seen`, `/disputes`, `/activity/:id/revert`, `/reports`.
+- UI: notification bell with unread count and navigation; a disputes section inside Activity with per-claim accept/reject; revert buttons on history entries; "Report a problem" on every profile.
+
+**Verification:** **100 tests passing** (69 domain + 31 API), typecheck clean, web build clean. Exercised live on a throwaway store: two contributors proposed different birth years, both proposals came back `disputed`, three claims were retained for the same field, and the administrator's feed showed 5 unread notices.
+
+**Deviations**
+1. Notifications are **derived on read**, so there is no delivery channel and no per-category preference yet (F-9.3 is partially met).
+2. The duplicate-suggestion notice initially used "now" as its timestamp, which made the unread count impossible to clear. It now derives its timestamp from the most recently updated candidate — a small bug with a real lesson: derived notifications need stable identity *and* stable time.
+
+---
+
 <!-- NEXT STEPS APPENDED BELOW -->
 
 ---
@@ -171,8 +190,8 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [x] F-5.2 Propose an edit — `MUST` *(API)*
 - [x] F-5.3 Direct edit within authority — `MUST` *(API)*
 - [x] F-5.4 Activity log — `MUST` *(API)*
-- [ ] F-5.5 Disputed values — `SHOULD` *(proposals exist; retained conflicting values pending)*
-- [ ] F-5.6 Revert — `SHOULD`
+- [x] F-5.5 Disputed values — `SHOULD`
+- [x] F-5.6 Revert — `SHOULD`
 - [ ] F-5.7 Comments on proposals — `COULD`
 
 ### E6 — Privacy and visibility
@@ -200,10 +219,10 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 ### E9 — Platform essentials
 - [ ] F-9.1 Audit logging — `MUST`
 - [ ] F-9.2 Internationalisation and RTL — `MUST`
-- [ ] F-9.3 Notifications — `MUST`
+- [ ] F-9.3 Notifications — `MUST` *(in-product feed done; delivery and preferences pending)*
 - [ ] F-9.4 Data export — `MUST`
 - [ ] F-9.5 Tree health summary — `COULD`
-- [ ] F-9.6 Abuse controls — `MUST`
+- [x] F-9.6 Abuse controls — `MUST` *(reporting, rate limits on invites; support tooling pending)*
 
 ---
 
@@ -217,7 +236,7 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | S2 — Persistence + API | Repository, seed family, auth-lite, REST endpoints | ✅ |
 | S3 — See it | Tree focus view, zoom/pan, expand/collapse, list fallback | ✅ |
 | S4 — Invite it | Invitations, claim flow, onboarding | ✅ |
-| S5 — Share it | Roles, proposals, activity log, disputes | 🟨 disputes UI pending |
+| S5 — Share it | Roles, proposals, activity log, disputes | ✅ |
 | S6 — Trust it | Field-level privacy, hidden branches, separation, minors | 🟨 hidden-branch authoring UI pending |
 | S7 — Harden | Search, duplicates, export, i18n, a11y, tree health | ⬜ |
 
@@ -243,3 +262,4 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | 2 | ✅ clean | ✅ 75 passing | n/a | API + seed; no web client yet |
 | 3 | ✅ clean | ✅ 81 passing | ✅ web build 268 kB (82 kB gzip) | Dev servers exercised over HTTP |
 | 4 | ✅ clean | ✅ 81 passing | ✅ | Onboarding flow exercised end-to-end on a throwaway store |
+| 5 | ✅ clean | ✅ 100 passing | ✅ web build 284 kB (86 kB gzip) | Dispute and revert flows exercised live |
