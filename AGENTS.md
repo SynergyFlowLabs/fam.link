@@ -10,8 +10,8 @@ Guidance for AI coding agents working on **fam.link** — a free, open, story-fi
 
 ## Stack
 
-- Next.js (App Router) + TypeScript + Tailwind CSS
-- SQLite via `better-sqlite3` + Drizzle ORM (production target is Postgres — keep queries portable, no raw SQLite-only SQL in app code)
+- Next.js 16 (App Router) + TypeScript + Tailwind CSS v4
+- SQLite via `better-sqlite3` + Drizzle ORM (production target is Postgres — keep queries portable, no SQLite-only SQL in app code)
 - Auth: custom email + password (scrypt) with DB-backed sessions in httpOnly cookies
 - Canvas: custom SVG renderer with a bespoke family-tree layout engine (no graph library)
 
@@ -21,6 +21,7 @@ Guidance for AI coding agents working on **fam.link** — a free, open, story-fi
 npm run dev          # dev server on 0.0.0.0:3000
 npm run build        # production build (must pass before pushing)
 npm run lint         # eslint
+npm test             # unit tests for pure logic (node --test)
 npx drizzle-kit push # apply schema changes to the SQLite DB (data/app.db)
 ```
 

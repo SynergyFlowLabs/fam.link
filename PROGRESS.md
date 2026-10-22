@@ -10,7 +10,7 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 ## Current status
 
 **Phase:** Phase 0 (Foundations)
-**Working app:** not yet running
+**Working app:** scaffold builds; no features yet
 **Last update:** 2026-10-22
 
 ## Phase 0 — Foundations
@@ -20,7 +20,7 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 | 0.1 | Product brief (idea refinement) | ✅ `docs/product-brief.md` |
 | 0.2 | Repo hygiene: AGENTS.md, PROGRESS.md, initial push | ✅ |
 | 0.3 | Install relevant skills from skills.sh | ⬜ |
-| 0.4 | Scaffold Next.js + TypeScript + Tailwind app, build passes | ⬜ |
+| 0.4 | Scaffold Next.js + TypeScript + Tailwind app, build passes | ✅ |
 | 0.5 | Data layer: Drizzle schema (users, sessions, trees, persons, unions, parent_child, memories) | ⬜ |
 | 0.6 | Auth: signup / signin / signout, scrypt + session cookies | ⬜ |
 | 0.7 | Landing page + dashboard (tree list, create/delete tree) | ⬜ |
@@ -67,3 +67,4 @@ Public deceased profiles, API, family book generation, governance. Not started.
 ## Next up
 
 - 0.3 install skills → 0.4 scaffold app → 0.5 data layer → 0.6 auth → 0.7 landing + dashboard
+- **2026-10-22 — Step 0.4:** Scaffolded Next.js 16 (App Router, Turbopack) + TS + Tailwind v4. Self-hosted Fraunces via @fontsource (no Google Fonts network dependency). Design tokens: evergreen/aged-paper/heirloom-gold palette in `globals.css`. Prod build passes.
