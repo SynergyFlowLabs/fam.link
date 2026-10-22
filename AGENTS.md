@@ -22,11 +22,11 @@ npm run dev          # dev server on 0.0.0.0:3000
 npm run build        # production build (must pass before pushing)
 npm run lint         # eslint
 npm test             # unit tests for pure logic (node --test)
-npx drizzle-kit push # apply schema changes to the SQLite DB (data/app.db)
 ```
 
-- The database file lives at `data/app.db` and uploads at `data/uploads/` — both are gitignored; never commit them.
-- After schema changes, run `npx drizzle-kit push` and restart the dev server.
+- The database file lives at `data/app.db` and uploads at `data/uploads/` (on Vercel: `/tmp/famlink`, ephemeral) — both are gitignored; never commit them.
+- **Schema changes:** edit `src/db/schema.ts`, run `npx drizzle-kit generate`, then re-embed the generated SQL into `src/db/migrations.ts` (idempotent `IF NOT EXISTS` form). Migrations auto-apply at boot — including on serverless, where a fresh SQLite is created per cold start. `npx drizzle-kit push` still works for quick local iteration; existing databases are baselined automatically.
+- Virgin databases auto-seed the demo account (demo@fam.link / demo1234) so every environment works out of the box.
 - To smoke-test without a browser: `curl -s localhost:3000/<route>` after starting the dev server.
 
 ## Hard rules (product invariants)

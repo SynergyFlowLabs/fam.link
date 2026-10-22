@@ -41,6 +41,7 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 | 1.10 | GEDCOM import (review workflow) | ⬜ |
 | 1.11 | JSON export | ✅ |
 | 1.12 | Invite collaborators with roles | ⬜ |
+| 1.13 | Vercel deployment (auto-migrate, auto-seed, /tmp data dir) | ✅ |
 
 ## Phase 2 — Story depth
 
@@ -75,3 +76,4 @@ Public deceased profiles, API, family book generation, governance. Not started.
 - **2026-10-22 — Steps 1.1–1.6:** The canvas is live. SVG tree with pan/zoom (wheel + drag, fit/zoom controls), couple & parent-child edges, hover quick-add pills (+father/+mother/+spouse/+child) with union-slot logic, unknown placeholders, fuzzy dates, "center tree here" re-rooting, header stats. Person profile pages with facts, all relationships, edit/delete. Story layer v0: text memories with when/who-remembers. Demo account seeded (demo@fam.link / demo1234) with a 12-person, 4-generation family incl. an unknown ancestor and 5 memories. Render-verified E2E via SSR smoke tests.
 - **2026-10-22 — Step 1.9 (writer):** GEDCOM 5.5.1 writer as pure function with 8 unit tests (xref resolution, fuzzy dates verbatim, unknown persons, single-parent families, CONT continuations, UTF-8 names, memories → NOTEs).
 - **2026-10-22 — Steps 1.7 + 1.9 (routes) + 1.11:** Photo memories: upload via server action (8 MB cap, image types), stored under `data/uploads/`, served through `/api/media/[id]` with owner-only access (404 otherwise), rendered in the memory feed. GEDCOM + JSON export routes (`/app/trees/[id]/export/{gedcom,json}`) with an Export menu on the canvas header; access-controlled, verified E2E (GEDCOM: 17 records for the demo tree; JSON: full model incl. memories; no-cookie → 404).
+- **2026-10-22 — Step 1.13 (deploy-ready):** Serverless-proofed the app: embedded idempotent migrations applied at boot (fresh SQLite per cold start works), `DATA_DIR` abstraction (`/tmp/famlink` on Vercel), virgin-DB demo auto-seed, media/upload paths via DATA_DIR, `allowedDevOrigins` for the e2b dev preview. Verified with a virgin-database boot: tables + 12-person demo family created automatically. NOTE: the Vercel deployment runs in demo mode (ephemeral storage); persistent Postgres is the documented production path (schema is portable by design).

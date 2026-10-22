@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { db } from "@/db";
+import { db, DATA_DIR } from "@/db";
 import {
   media,
   memories,
@@ -276,7 +276,7 @@ export async function addMemoryAction(formData: FormData): Promise<void> {
     };
     const ext = extByMime[photo.type] ?? "img";
     mediaId = randomUUID();
-    const dir = path.join(process.cwd(), "data", "uploads");
+    const dir = path.join(DATA_DIR, "uploads");
     mkdirSync(dir, { recursive: true });
     await writeFile(
       path.join(dir, `${mediaId}.${ext}`),
