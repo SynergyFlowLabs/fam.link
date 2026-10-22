@@ -468,6 +468,7 @@ export function createApp(): express.Express {
       permissions: {
         canEditDirectly: ctx.actor ? canEditField(ctx.actor!, person, 'givenName').allowed : false,
         canRequestSeparation: ctx.actor ? canRequestSeparation(ctx.actor!, person).allowed : false,
+        canRestore: Boolean(ctx.actor && canManageMembers(ctx.actor).allowed && person.separatedAt),
       },
     });
   });
@@ -754,6 +755,10 @@ export function createApp(): express.Express {
       response.status(403).json({ error: decision.reason });
       return;
     }
+    if (person.separatedAt) {
+      response.status(409).json({ error: 'That profile is already separated from this family space.' });
+      return;
+    }
     (person as unknown as { separatedAt: string }).separatedAt = nowIso();
     recordActivity(store, {
       spaceId,
@@ -763,7 +768,10 @@ export function createApp(): express.Express {
       summary: `${displayName(person)} was separated from the tree at their request`,
     });
     saveStore();
-    response.json({ ok: true });
+    response.json({
+      ok: true,
+      note: 'The record stays as a structural link for descendants, but is hidden from other members. Administrators can restore it.',
+    });
   });
 
   // ---------------------------------------------------------------- relationships
@@ -1924,6 +1932,116 @@ export function createApp(): express.Express {
     });
     saveStore();
     response.status(201).json({ ok: true });
+  });
+
+  /**
+   * The safety queue. Reports used to be written and never read, which is worse than not offering
+   * the button: the person reporting believed someone would see it.
+   */
+  app.get('/api/spaces/:spaceId/reports', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor } = ctx as Required<Context>;
+    if (!actor || !canManageMembers(actor).allowed) {
+      response.status(403).json({ error: 'Only family administrators can review reports.' });
+      return;
+    }
+    const nameOfUser = (id: string) => userById(store, id)?.name ?? 'A member';
+    response.json({
+      reports: store.reports
+        .filter((report) => report.spaceId === spaceId)
+        .slice()
+        .reverse()
+        .map((report) => {
+          const person = report.personId
+            ? store.persons.find((candidate) => candidate.id === report.personId && candidate.spaceId === spaceId)
+            : undefined;
+          return {
+            ...report,
+            reportedBy: nameOfUser(report.reportedByUserId),
+            resolvedBy: report.resolvedByUserId ? nameOfUser(report.resolvedByUserId) : undefined,
+            personName: person ? displayName(person) : undefined,
+          };
+        }),
+    });
+  });
+
+  app.post('/api/spaces/:spaceId/reports/:reportId/resolve', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor, userId } = ctx as Required<Context>;
+    if (!actor || !canManageMembers(actor).allowed) {
+      response.status(403).json({ error: 'Only family administrators can resolve reports.' });
+      return;
+    }
+    const report = store.reports.find(
+      (candidate) => candidate.id === request.params.reportId && candidate.spaceId === spaceId,
+    );
+    if (!report) {
+      response.status(404).json({ error: 'Report not found.' });
+      return;
+    }
+    const body = request.body as { outcome?: 'resolved' | 'dismissed'; note?: string };
+    if (body.outcome !== 'resolved' && body.outcome !== 'dismissed') {
+      response.status(400).json({ error: 'outcome must be resolved or dismissed.' });
+      return;
+    }
+    (report as unknown as { status: string }).status = body.outcome;
+    (report as unknown as { resolvedByUserId: string }).resolvedByUserId = userId;
+    (report as unknown as { resolvedAt: string }).resolvedAt = nowIso();
+    if (body.note?.trim()) {
+      (report as unknown as { resolutionNote: string }).resolutionNote = body.note.trim();
+    }
+    recordActivity(store, {
+      spaceId,
+      kind: 'report.resolved',
+      actorUserId: userId,
+      personId: report.personId,
+      summary:
+        body.outcome === 'resolved'
+          ? `A report was reviewed and actioned by ${userById(store, userId)?.name ?? 'an administrator'}`
+          : `A report was reviewed and dismissed by ${userById(store, userId)?.name ?? 'an administrator'}`,
+      after: { reportId: report.id, outcome: body.outcome },
+    });
+    saveStore();
+    response.json({ ok: true });
+  });
+
+  app.post('/api/spaces/:spaceId/people/:personId/restore', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor, userId } = ctx as Required<Context>;
+    if (!actor || !canManageMembers(actor).allowed) {
+      response.status(403).json({ error: 'Only family administrators can restore a separated profile.' });
+      return;
+    }
+    const person = findPerson(store, spaceId, request.params.personId!);
+    if (!person || !person.separatedAt) {
+      response.status(404).json({ error: 'No separated profile to restore.' });
+      return;
+    }
+    (person as unknown as { separatedAt?: string }).separatedAt = undefined;
+    recordActivity(store, {
+      spaceId,
+      kind: 'person.restored',
+      actorUserId: userId,
+      personId: person.id,
+      summary: `${displayName(person)} was restored to the family space`,
+    });
+    saveStore();
+    response.json({ ok: true });
   });
 
   app.get('/api/spaces/:spaceId/activity', (request, response) => {

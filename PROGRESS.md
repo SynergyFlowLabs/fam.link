@@ -326,6 +326,32 @@ against the running API that muting `claims` leaves `safety` enabled and the saf
 
 ---
 
+### Step 16 — The safety queue, and separation that can be undone ✅
+
+Reports were being written to the store and never read. That is worse than not offering the button:
+the person reporting believed someone would see it.
+
+**Shipped**
+- `GET /spaces/:id/reports` (administrators) with the reporter, the profile, the reason and the
+  current state; `POST /reports/:id/resolve` records `resolved`/`dismissed`, who decided and when,
+  and writes a `report.resolved` activity entry.
+- Reports now appear in the administrator's notification feed under **safety**, a category that
+  cannot be muted (Step 14).
+- Separation was implemented but impossible to undo, which made a mis-tap permanent. Added
+  `POST /people/:id/restore` (administrators) plus `permissions.canRestore` so the profile panel only
+  offers the action when the API will accept it. A second separation request now returns 409 rather
+  than silently re-stamping the record.
+- Privacy screen: a **Safety queue** card for administrators, with the reasoning that reporting is not
+  a vote — one report reaches an administrator and the decision is recorded in the activity log.
+- Five API tests: a report reaching the right people and not the wrong ones, resolution being final
+  and logged, separation hiding a person from members while remaining visible to administrators,
+  refusal on someone else's profile, and restore returning them to view.
+
+**Verification:** **152 tests passing**, typecheck clean, web build 305 kB (91 kB gzip). Filed and
+read a report against the running API end to end.
+
+---
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.

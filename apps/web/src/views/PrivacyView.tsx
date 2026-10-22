@@ -37,6 +37,11 @@ export function PrivacyView({
 }) {
   const branches = useAsync(() => api.hiddenBranches(spaceId), [spaceId]);
   const preferences = useAsync(() => api.notificationPreferences(spaceId), [spaceId]);
+  const reports = useAsync(
+    () =>
+      api.reports(spaceId).catch(() => ({ reports: [] as Awaited<ReturnType<typeof api.reports>>['reports'] })),
+    [spaceId],
+  );
   const people = useAsync(() => api.people(spaceId), [spaceId]);
   const profile = useAsync(() => (personId ? api.person(spaceId, personId) : Promise.resolve(null)), [spaceId, personId]);
   const person = profile.data?.person;
@@ -187,6 +192,62 @@ export function PrivacyView({
           ) : null}
         </div>
       </section>
+
+      {(reports.data?.reports.length ?? 0) > 0 ? (
+        <section className="card">
+          <div className="section-title">
+            <h3 style={{ fontSize: 'var(--step-1)' }}>Safety queue</h3>
+            <span className="hint">Visible to administrators only</span>
+          </div>
+          <p className="small muted" style={{ margin: '0 0 var(--sp-3)' }}>
+            Reports from members. Reporting is not a vote: one report reaches an administrator, and the outcome is
+            recorded in the activity log.
+          </p>
+          <div className="list">
+            {reports.data!.reports.map((report) => (
+              <div className="row" key={report.id} style={{ alignItems: 'flex-start' }}>
+                <div className="row__main">
+                  <div className="row__subject">
+                    {report.personName ?? 'A profile'}{' '}
+                    <Chip tone={report.status === 'open' ? 'brass' : 'muted'}>{report.status}</Chip>
+                  </div>
+                  <div className="row__sub">“{report.reason}”</div>
+                  <div className="hint">
+                    Reported by {report.reportedBy} · {new Date(report.createdAt).toLocaleDateString()}
+                    {report.resolutionNote ? ` · ${report.resolutionNote}` : ''}
+                  </div>
+                </div>
+                {report.status === 'open' ? (
+                  <div className="row__actions">
+                    <button
+                      type="button"
+                      className="btn small"
+                      onClick={async () => {
+                        await api.resolveReport(spaceId, report.id, 'dismissed');
+                        reports.reload();
+                        setMessage({ tone: 'ok', text: 'Report dismissed, with the decision recorded.' });
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--primary small"
+                      onClick={async () => {
+                        await api.resolveReport(spaceId, report.id, 'resolved');
+                        reports.reload();
+                        setMessage({ tone: 'ok', text: 'Report marked resolved.' });
+                      }}
+                    >
+                      Mark resolved
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="card">
         <div className="section-title">

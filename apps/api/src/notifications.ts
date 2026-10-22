@@ -27,7 +27,8 @@ export interface Notification {
     | 'claim'
     | 'duplicates'
     | 'member'
-    | 'separation';
+    | 'separation'
+    | 'report';
   readonly title: string;
   readonly detail?: string;
   readonly createdAt: string;
@@ -87,6 +88,7 @@ const CATEGORY_OF_KIND: Readonly<Record<Notification['kind'], string>> = {
   claim: 'claims',
   duplicates: 'admin',
   separation: 'safety',
+  report: 'safety',
 };
 
 export function categoryOf(kind: Notification['kind']): string {
@@ -209,6 +211,19 @@ export function notificationsFor(store: Store, spaceId: Id, userId: Id): Notific
   }
 
   if (canManageMembers(actor).allowed) {
+    for (const report of store.reports) {
+      if (report.spaceId !== spaceId || report.status !== 'open') continue;
+      notifications.push({
+        id: `report-${report.id}`,
+        kind: 'report',
+        title: 'A report about a profile needs review',
+        detail: report.reason,
+        createdAt: report.createdAt,
+        personId: report.personId,
+        action: 'activity',
+      });
+    }
+
     const visiblePeople = new Map<Id, Person>(index.persons);
     const dismissed = new Set(store.dismissedDuplicates.filter((entry) => entry.spaceId === spaceId).map((entry) => entry.pairKey));
     let duplicateCount = 0;

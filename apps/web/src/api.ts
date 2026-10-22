@@ -77,7 +77,7 @@ export interface ProfileResponse {
     canDecide: boolean;
   }>;
   activity: ActivityEntry[];
-  permissions: { canEditDirectly: boolean; canRequestSeparation: boolean };
+  permissions: { canEditDirectly: boolean; canRequestSeparation: boolean; canRestore?: boolean };
 }
 
 export interface ActivityEntry {
@@ -291,6 +291,27 @@ export const api = {
     call<{ notifications: Notification[]; unread: number }>(`/api/spaces/${spaceId}/notifications`),
   markNotificationsSeen: (spaceId: string) =>
     call<{ ok: true }>(`/api/spaces/${spaceId}/notifications/seen`, { method: 'POST', body: '{}' }),
+  reports: (spaceId: string) =>
+    call<{
+      reports: Array<{
+        id: string;
+        personId?: string;
+        personName?: string;
+        reportedBy: string;
+        reason: string;
+        status: 'open' | 'resolved' | 'dismissed';
+        createdAt: string;
+        resolvedAt?: string;
+        resolutionNote?: string;
+      }>;
+    }>(`/api/spaces/${spaceId}/reports`),
+  resolveReport: (spaceId: string, reportId: string, outcome: 'resolved' | 'dismissed', note?: string) =>
+    call<{ ok: true }>(`/api/spaces/${spaceId}/reports/${reportId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ outcome, note }),
+    }),
+  restorePerson: (spaceId: string, personId: string) =>
+    call<{ ok: true }>(`/api/spaces/${spaceId}/people/${personId}/restore`, { method: 'POST', body: '{}' }),
   notificationPreferences: (spaceId: string) =>
     call<{
       categories: Array<{ id: string; label: string; description: string; mutable: boolean; enabled: boolean }>;

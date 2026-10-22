@@ -818,6 +818,23 @@ export function ProfilePanel({ spaceId, personId, onFocus, onSelect, onAddRelati
           >
             Report a problem
           </button>
+          {permissions.canRestore ? (
+            <button
+              type="button"
+              className="btn small"
+              onClick={async () => {
+                try {
+                  await api.restorePerson(spaceId, personId);
+                  setMessage({ tone: 'ok', text: 'Restored. Members can see this profile again.' });
+                  profile.reload();
+                } catch (error) {
+                  setMessage({ tone: 'danger', text: error instanceof Error ? error.message : 'Could not restore the profile.' });
+                }
+              }}
+            >
+              Restore to the family space
+            </button>
+          ) : null}
           {permissions.canRequestSeparation ? (
           <button
             type="button"

@@ -43,8 +43,11 @@ export interface Report {
   readonly personId?: Id;
   readonly reportedByUserId: Id;
   readonly reason: string;
-  readonly status: 'open' | 'resolved';
+  readonly status: 'open' | 'resolved' | 'dismissed';
   readonly createdAt: string;
+  readonly resolvedByUserId?: Id;
+  readonly resolvedAt?: string;
+  readonly resolutionNote?: string;
 }
 
 /**

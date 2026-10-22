@@ -227,6 +227,8 @@ export type ActivityKind =
   | 'invitation.revoked'
   | 'duplicate.merged'
   | 'duplicate.merge.reverted'
+  | 'report.resolved'
+  | 'person.restored'
   | 'duplicate.dismissed';
 
 export interface ActivityEntry {
