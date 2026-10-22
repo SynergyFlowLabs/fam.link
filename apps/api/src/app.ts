@@ -250,8 +250,38 @@ export function createApp(): express.Express {
       status: 'active',
       joinedAt: nowIso(),
     });
+
+    // Seed the creator's own person record and claim it: the tree starts from a real identity,
+    // not an empty canvas (PRD §12.1).
+    const [givenName, ...rest] = user.name.split(' ');
+    const selfPerson: Person = {
+      id: nextId(store, 'person'),
+      spaceId,
+      givenName: givenName ?? user.name,
+      familyName: rest.join(' ') || undefined,
+      alternativeNames: [],
+      gender: 'unknown',
+      livingStatus: 'living',
+      placesLived: [],
+      isMinor: false,
+      fieldVisibility: {},
+      blockedUserIds: [],
+      selectedViewerIds: [],
+      claimedByUserId: userId,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      createdByUserId: userId,
+    };
+    store.persons.push(selfPerson);
+    recordActivity(store, {
+      spaceId,
+      kind: 'person.created',
+      actorUserId: userId,
+      personId: selfPerson.id,
+      summary: `${user.name} created the ${name.trim()} family space`,
+    });
     saveStore();
-    response.status(201).json({ space: spaceById(store, spaceId), user });
+    response.status(201).json({ space: spaceById(store, spaceId), user, personId: selfPerson.id });
   });
 
   // ---------------------------------------------------------------- tree

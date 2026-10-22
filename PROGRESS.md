@@ -109,6 +109,21 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 4 — Guided onboarding and family-space creation ✅
+
+**Goal:** remove the empty canvas. A new family starts from a person, not a diagram.
+
+**Shipped**
+- `POST /api/spaces` now seeds the creator's own person record and claims it, so the tree starts from a real identity and the creator immediately owns their own sensitive fields.
+- `views/Onboarding.tsx` — six skippable steps (you → parents → siblings → partner → children → invite), each creating real relationships: parents as `childId`, siblings through **shared parents** (never a stored sibling edge), partners as `partnerId`, children as `parentId`. Ends with a generated invitation.
+- `NewSpaceDialog` in the shell, plus a topbar "New family" action.
+
+**Verification:** exercised end-to-end against a throwaway store with curl — created a space, renamed self, added a parent, added a sibling, then read the tree: **3 nodes, 2 edges**, and the sibling correctly reached the tree through the parent rather than a sibling link. Invitation creation returned a token. Full suite still **81 passing**, typecheck clean.
+
+**Note on scope:** this is deliberately not a multi-space switcher; the shell picks the user's first space, and the new space becomes active for the onboarding session. Building a real space switcher belongs with invitations across spaces (phase 2 in the PRD).
+
+---
+
 <!-- NEXT STEPS APPENDED BELOW -->
 
 ---
@@ -124,12 +139,12 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [ ] F-1.4 Account deletion and export — `MUST`
 
 ### E2 — Family space and tree creation
-- [x] F-2.1 Create a family space — `MUST` *(API)*
+- [x] F-2.1 Create a family space — `MUST`
 - [x] F-2.2 Add parents, spouses, children, siblings — `MUST` *(API)*
 - [x] F-2.3 Relationship types (stored vs derived) — `MUST`
 - [x] F-2.4 Edit and correct any person — `MUST` *(API; history via activity log)*
 - [ ] F-2.5 Partial dates, places, uncertain facts — `MUST`
-- [ ] F-2.6 Guided onboarding — `MUST` *(not built: the demo starts from a populated family)*
+- [x] F-2.6 Guided onboarding — `MUST`
 - [ ] F-2.7 Places lived — `COULD`
 - [ ] F-2.8 Biography — `SHOULD`
 - [ ] F-2.9 Profile photo — `MUST`
@@ -201,7 +216,7 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | S1 — Domain skeleton | Graph model, derivation, relationship calculator, tests | ✅ |
 | S2 — Persistence + API | Repository, seed family, auth-lite, REST endpoints | ✅ |
 | S3 — See it | Tree focus view, zoom/pan, expand/collapse, list fallback | ✅ |
-| S4 — Invite it | Invitations, claim flow, onboarding | 🟨 invitations + claim done; onboarding pending |
+| S4 — Invite it | Invitations, claim flow, onboarding | ✅ |
 | S5 — Share it | Roles, proposals, activity log, disputes | 🟨 disputes UI pending |
 | S6 — Trust it | Field-level privacy, hidden branches, separation, minors | 🟨 hidden-branch authoring UI pending |
 | S7 — Harden | Search, duplicates, export, i18n, a11y, tree health | ⬜ |
@@ -227,3 +242,4 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | 1 | ✅ clean | ✅ 59 passing | n/a | Domain package, no I/O |
 | 2 | ✅ clean | ✅ 75 passing | n/a | API + seed; no web client yet |
 | 3 | ✅ clean | ✅ 81 passing | ✅ web build 268 kB (82 kB gzip) | Dev servers exercised over HTTP |
+| 4 | ✅ clean | ✅ 81 passing | ✅ | Onboarding flow exercised end-to-end on a throwaway store |

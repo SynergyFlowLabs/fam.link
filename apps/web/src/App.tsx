@@ -13,6 +13,7 @@ import { ActivityView } from './views/ActivityView.js';
 import { CalculatorView } from './views/CalculatorView.js';
 import { InvitationsView } from './views/InvitationsView.js';
 import { InviteView } from './views/InviteView.js';
+import { Onboarding } from './views/Onboarding.js';
 import { PeopleView } from './views/PeopleView.js';
 import { ProfilePanel, TreeView } from './views/TreeView.js';
 
@@ -30,6 +31,8 @@ export default function App() {
   const [focusId, setFocusId] = useState<string | undefined>(undefined);
   const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>(undefined);
   const [addRelativeTo, setAddRelativeTo] = useState<string | null | undefined>(undefined);
+  const [onboarding, setOnboarding] = useState<{ spaceId: string; personId: string } | null>(null);
+  const [newSpaceOpen, setNewSpaceOpen] = useState(false);
 
   const memberships = session.data?.memberships ?? [];
   const membership = useMemo(
@@ -74,6 +77,26 @@ export default function App() {
   const activeSpaceId = membership?.spaceId ?? spaceId ?? '';
   const canManage = membership?.role === 'admin';
   const page = route.path[0] ?? 'tree';
+
+  if (!activeSpaceId) {
+    return (
+      <div className="invite">
+        <div className="invite__card">
+          <div className="invite__eyebrow">Fam Link</div>
+          <p className="invite__quote">You are not part of a family space yet.</p>
+          <p className="invite__who">
+            Ask a relative for an invitation link. Families are private: nobody is discoverable, and nobody is added
+            without an invitation.
+          </p>
+          <div className="row__actions" style={{ marginTop: 'var(--sp-4)' }}>
+            <button type="button" className="btn" onClick={() => void api.signOut().then(session.reload)}>
+              Switch account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="shell">
@@ -131,6 +154,9 @@ export default function App() {
                 </option>
               ))}
             </select>
+            <button type="button" className="btn btn--quiet" onClick={() => setNewSpaceOpen(true)}>
+              New family
+            </button>
             <button type="button" className="btn btn--quiet" onClick={() => void api.signOut().then(session.reload)}>
               Sign out
             </button>
@@ -185,6 +211,35 @@ export default function App() {
           ) : null}
         </main>
       </div>
+
+      {newSpaceOpen ? (
+        <NewSpaceDialog
+          onClose={() => setNewSpaceOpen(false)}
+          onCreated={(spaceId, personId) => {
+            setNewSpaceOpen(false);
+            setSpaceId(spaceId);
+            setFocusId(personId);
+            setOnboarding({ spaceId, personId });
+            session.reload();
+          }}
+        />
+      ) : null}
+
+      {onboarding ? (
+        <Onboarding
+          spaceId={onboarding.spaceId}
+          personId={onboarding.personId}
+          onClose={() => {
+            setOnboarding(null);
+            session.reload();
+          }}
+          onFinished={() => {
+            setOnboarding(null);
+            session.reload();
+            route.navigate('tree');
+          }}
+        />
+      ) : null}
 
       {addRelativeTo !== undefined ? (
         <AddRelativeDialog
@@ -244,6 +299,51 @@ function PersonaPicker({
   );
 }
 
+function NewSpaceDialog({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (spaceId: string, personId: string) => void;
+}) {
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const create = async () => {
+    setBusy(true);
+    try {
+      const created = await api.createSpace(name.trim());
+      onCreated(created.space.id, created.personId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not create the family space.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog
+      title="Start a family tree"
+      onClose={onClose}
+      actions={
+        <button type="button" className="btn btn--primary" disabled={busy || !name.trim()} onClick={() => void create()}>
+          {busy ? 'Creating…' : 'Create family space'}
+        </button>
+      }
+    >
+      <p className="hint" style={{ marginTop: 0 }}>
+        A family space is private by default: no public page, no discovery, no search engine. You will be able to invite
+        relatives immediately.
+      </p>
+      <Field label="Family name" hint="For example: Khan Family">
+        <input value={name} onChange={(event) => setName(event.target.value)} autoFocus placeholder="Khan Family" />
+      </Field>
+      {error ? <Notice tone="danger">{error}</Notice> : null}
+    </Dialog>
+  );
+}
+
 type RelationChoice = 'parent' | 'child' | 'spouse' | 'sibling' | 'none';
 
 function AddRelativeDialog({
@@ -261,7 +361,7 @@ function AddRelativeDialog({
   const [familyName, setFamilyName] = useState('');
   const [gender, setGender] = useState<PersonView['gender']>('unknown');
   const [birthYear, setBirthYear] = useState('');
-  const [relation, setRelation] = useState<RelationChoice>('child');
+  const [relation, setRelation] = useState<RelationChoice>(anchorId ? 'child' : 'none');
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -335,10 +435,14 @@ function AddRelativeDialog({
       </div>
       <Field label="Relationship">
         <select value={relation} onChange={(event) => setRelation(event.target.value as RelationChoice)}>
-          <option value="child">Child of the selected person</option>
-          <option value="parent">Parent of the selected person</option>
-          <option value="spouse">Spouse or partner of the selected person</option>
-          <option value="sibling">Sibling of the selected person</option>
+          {anchorId ? (
+            <>
+              <option value="child">Child of the selected person</option>
+              <option value="parent">Parent of the selected person</option>
+              <option value="spouse">Spouse or partner of the selected person</option>
+            </>
+          ) : null}
+          {anchorId ? <option value="sibling">Sibling of the selected person</option> : null}
           <option value="none">Not connected yet</option>
         </select>
       </Field>

@@ -145,6 +145,11 @@ export const api = {
   session: () => call<SessionResponse>('/api/session'),
   signIn: (userId: string) => call<{ user: SessionResponse['user'] }>('/api/session', { method: 'POST', body: JSON.stringify({ userId }) }),
   signOut: () => call<{ ok: true }>('/api/session', { method: 'DELETE' }),
+  createSpace: (name: string) =>
+    call<{ space: { id: string; name: string }; personId: string }>('/api/spaces', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
   tree: (spaceId: string, focus?: string, up = 2, down = 2) =>
     call<TreeResponse>(
       `/api/spaces/${spaceId}/tree?${new URLSearchParams({

@@ -38,6 +38,24 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
   const canvas = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const element = canvas.current;
+    if (!element) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = element.getBoundingClientRect();
+      const px = event.clientX - rect.left;
+      const py = event.clientY - rect.top;
+      setView((current) => {
+        const next = Math.min(1.8, Math.max(0.45, current.scale - event.deltaY * 0.0012));
+        const ratio = next / current.scale;
+        return { scale: next, x: px - (px - current.x) * ratio, y: py - (py - current.y) * ratio };
+      });
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, []);
+
+  useEffect(() => {
     if (!tree.data) return;
     // Centre the focus card in the canvas when the window changes.
     const layout = layoutTree(tree.data.nodes, tree.data.edges, tree.data.focusId);
@@ -137,21 +155,6 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
           }}
           onPointerLeave={() => {
             dragging.current = null;
-          }}
-          onWheel={(event) => {
-            event.preventDefault();
-            setView((current) => {
-              const next = Math.min(1.8, Math.max(0.45, current.scale - event.deltaY * 0.0012));
-              const rect = canvas.current?.getBoundingClientRect();
-              const px = rect ? event.clientX - rect.left : 0;
-              const py = rect ? event.clientY - rect.top : 0;
-              const ratio = next / current.scale;
-              return {
-                scale: next,
-                x: px - (px - current.x) * ratio,
-                y: py - (py - current.y) * ratio,
-              };
-            });
           }}
         >
           <div
