@@ -2,6 +2,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { fail, type ActionResult } from "@/lib/action-result";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { db } from "@/db";
@@ -33,32 +34,39 @@ export async function createTreeAction(formData: FormData): Promise<void> {
   redirect(`/app/trees/${treeId}`);
 }
 
-export async function renameTreeAction(formData: FormData): Promise<void> {
+export async function renameTreeAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
 
   const treeId = String(formData.get("treeId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const tree = await ownedTree(treeId, user.id);
-  if (!tree || !name) return;
+  if (!tree) return fail("That tree no longer exists.");
+  if (!name) return fail("A tree needs a name.");
 
   await db
     .update(trees)
     .set({ name, updatedAt: new Date() })
     .where(eq(trees.id, treeId));
   revalidatePath("/app");
+  return { ok: true, message: name };
 }
 
-export async function deleteTreeAction(formData: FormData): Promise<void> {
+export async function deleteTreeAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
 
   const treeId = String(formData.get("treeId") ?? "");
   const tree = await ownedTree(treeId, user.id);
-  if (!tree) return;
+  if (!tree) return fail("That tree no longer exists.");
 
   // FK cascade removes persons, unions, memories, media rows.
   // (Orphaned files under data/uploads are swept later — tracked in PROGRESS.)
   await db.delete(trees).where(eq(trees.id, treeId));
   revalidatePath("/app");
+  return { ok: true, message: tree.name };
 }

@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { shareLinks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ownedTree } from "@/actions/trees";
+import { fail, type ActionResult } from "@/lib/action-result";
 
 /**
  * Creates a public read-only link for one of the user's trees. The token is
@@ -14,34 +15,36 @@ import { ownedTree } from "@/actions/trees";
  */
 export async function createShareLinkAction(
   formData: FormData,
-): Promise<void> {
+): Promise<ActionResult> {
   const user = await getCurrentUser();
-  if (!user) return;
+  if (!user) return fail("Your session expired — sign in again.");
   const treeId = String(formData.get("treeId") ?? "");
   const label = String(formData.get("label") ?? "").trim().slice(0, 120);
   const tree = await ownedTree(treeId, user.id);
-  if (!tree) return;
+  if (!tree) return fail("That tree no longer exists.");
 
+  const token = randomBytes(24).toString("base64url");
   await db.insert(shareLinks).values({
     id: randomUUID(),
     treeId,
-    token: randomBytes(24).toString("base64url"),
+    token,
     label: label || null,
     createdBy: user.id,
   });
   revalidatePath(`/app/trees/${treeId}`);
+  return { ok: true, token };
 }
 
 /** Revoking keeps the row (audit trail) but the URL stops working instantly. */
 export async function revokeShareLinkAction(
   formData: FormData,
-): Promise<void> {
+): Promise<ActionResult> {
   const user = await getCurrentUser();
-  if (!user) return;
+  if (!user) return fail("Your session expired — sign in again.");
   const treeId = String(formData.get("treeId") ?? "");
   const linkId = String(formData.get("linkId") ?? "");
   const tree = await ownedTree(treeId, user.id);
-  if (!tree) return;
+  if (!tree) return fail("That tree no longer exists.");
 
   await db
     .update(shareLinks)
@@ -54,4 +57,5 @@ export async function revokeShareLinkAction(
       ),
     );
   revalidatePath(`/app/trees/${treeId}`);
+  return { ok: true };
 }

@@ -8,6 +8,7 @@ import {
   updatePersonAction,
 } from "@/actions/persons";
 import type { Person } from "@/db/schema";
+import { useToast } from "@/components/toaster";
 
 const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink-soft";
 
@@ -20,12 +21,19 @@ export function EditPersonForm({
 }) {
   const [living, setLiving] = useState(person.living);
   const [pending, startTransition] = useTransition();
+  const toast = useToast();
 
   return (
     <form
       action={(fd: FormData) => {
         startTransition(async () => {
-          await updatePersonAction(fd);
+          try {
+            const res = await updatePersonAction(fd);
+            if (res.ok) toast.success("Changes saved");
+            else toast.error(res.error ?? "Couldn't save — please try again.");
+          } catch {
+            toast.error("Something went wrong — please try again.");
+          }
         });
       }}
       className="flex flex-col gap-3.5"
@@ -129,6 +137,7 @@ export function MemorySection({
 }) {
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   return (
     <section className="rounded-2xl border border-line bg-card p-5">
@@ -146,8 +155,17 @@ export function MemorySection({
       <form
         action={(fd: FormData) => {
           startTransition(async () => {
-            await addMemoryAction(fd);
-            if (fileRef.current) fileRef.current.value = "";
+            try {
+              const res = await addMemoryAction(fd);
+              if (res.ok) {
+                toast.success("Memory saved");
+                if (fileRef.current) fileRef.current.value = "";
+              } else {
+                toast.error(res.error ?? "Couldn't save the memory — try again.");
+              }
+            } catch {
+              toast.error("Something went wrong — please try again.");
+            }
           });
         }}
         onSubmit={(e) => {
@@ -231,7 +249,13 @@ export function MemorySection({
               <form
                 action={(fd: FormData) => {
                   startTransition(async () => {
-                    await deleteMemoryAction(fd);
+                    try {
+                      const res = await deleteMemoryAction(fd);
+                      if (res.ok) toast.info("Memory removed");
+                      else toast.error(res.error ?? "Couldn't remove it — try again.");
+                    } catch {
+                      toast.error("Something went wrong — please try again.");
+                    }
                   });
                 }}
                 className="mt-1"

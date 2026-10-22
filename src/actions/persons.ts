@@ -19,8 +19,13 @@ import {
 } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ownedTree } from "@/actions/trees";
+import { OK, fail, type ActionResult } from "@/lib/action-result";
 
 export type Relation = "father" | "mother" | "spouse" | "child";
+
+function displayName(fields: ReturnType<typeof personFields>): string {
+  return [fields.firstName, fields.lastName].filter(Boolean).join(" ") || "Someone";
+}
 
 function personFields(formData: FormData) {
   const gender = String(formData.get("gender") ?? "");
@@ -100,10 +105,13 @@ async function unionsOfPartner(personId: string) {
   );
 }
 
-export async function addFirstPersonAction(formData: FormData): Promise<void> {
+export async function addFirstPersonAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
   const tree = await assertOwned(treeId);
   const fields = personFields(formData);
+  const name = displayName(fields);
   const id = await insertPerson(treeId, fields);
   if (!tree.focusPersonId) {
     await db
@@ -113,18 +121,22 @@ export async function addFirstPersonAction(formData: FormData): Promise<void> {
   }
   await touchTree(treeId);
   revalidateTree(treeId);
+  return { ok: true, message: name };
 }
 
-export async function addRelativeAction(formData: FormData): Promise<void> {
+export async function addRelativeAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
   await assertOwned(treeId);
   const anchorId = String(formData.get("anchorId") ?? "");
   const relation = String(formData.get("relation") ?? "") as Relation;
   if (!anchorId || !["father", "mother", "spouse", "child"].includes(relation)) {
-    return;
+    return fail("That relationship slot isn't available — reload the page and try again.");
   }
 
   const fields = personFields(formData);
+  const name = displayName(fields);
   if (relation === "father" || relation === "mother") {
     const newId = await insertPerson(treeId, {
       ...fields,
@@ -183,13 +195,16 @@ export async function addRelativeAction(formData: FormData): Promise<void> {
 
   await touchTree(treeId);
   revalidateTree(treeId, anchorId);
+  return { ok: true, message: name };
 }
 
-export async function updatePersonAction(formData: FormData): Promise<void> {
+export async function updatePersonAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
   await assertOwned(treeId);
   const personId = String(formData.get("personId") ?? "");
-  if (!personId) return;
+  if (!personId) return fail("That person is no longer in this tree.");
 
   const fields = personFields(formData);
   await db
@@ -198,6 +213,7 @@ export async function updatePersonAction(formData: FormData): Promise<void> {
     .where(and(eq(persons.id, personId), eq(persons.treeId, treeId)));
   await touchTree(treeId);
   revalidateTree(treeId, personId);
+  return { ok: true, message: displayName(fields) };
 }
 
 export async function deletePersonAction(formData: FormData): Promise<void> {
@@ -254,7 +270,9 @@ export async function setFocusPersonAction(formData: FormData): Promise<void> {
   revalidateTree(treeId);
 }
 
-export async function addMemoryAction(formData: FormData): Promise<void> {
+export async function addMemoryAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
   await assertOwned(treeId);
   const personId = String(formData.get("personId") ?? "");
@@ -265,8 +283,10 @@ export async function addMemoryAction(formData: FormData): Promise<void> {
   let mediaId: string | null = null;
   let kind: "text" | "photo" = "text";
   if (photo instanceof File && photo.size > 0) {
-    if (!photo.type.startsWith("image/")) return;
-    if (photo.size > 8 * 1024 * 1024) return; // 8 MB cap
+    if (!photo.type.startsWith("image/"))
+      return fail("That file isn't an image — try a JPG, PNG or WebP.");
+    if (photo.size > 8 * 1024 * 1024)
+      return fail("Photos need to be under 8 MB.");
     const extByMime: Record<string, string> = {
       "image/jpeg": "jpg",
       "image/png": "png",
@@ -293,7 +313,8 @@ export async function addMemoryAction(formData: FormData): Promise<void> {
     kind = "photo";
   }
 
-  if (!personId || (!body && kind !== "photo")) return;
+  if (!personId || (!body && kind !== "photo"))
+    return fail("Write something, or attach a photo first.");
 
   const occurred = String(formData.get("occurredText") ?? "").trim();
   const author = String(formData.get("authorName") ?? "").trim();
@@ -308,14 +329,17 @@ export async function addMemoryAction(formData: FormData): Promise<void> {
   });
   await touchTree(treeId);
   revalidateTree(treeId, personId);
+  return OK;
 }
 
-export async function deleteMemoryAction(formData: FormData): Promise<void> {
+export async function deleteMemoryAction(
+  formData: FormData,
+): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
   await assertOwned(treeId);
   const memoryId = String(formData.get("memoryId") ?? "");
   const personId = String(formData.get("personId") ?? "");
-  if (!memoryId) return;
+  if (!memoryId) return fail("That memory is already gone.");
   // Ensure the memory belongs to a person in this tree
   const rows = await db
     .select({ personId: memories.personId, treeId: persons.treeId })
@@ -323,11 +347,13 @@ export async function deleteMemoryAction(formData: FormData): Promise<void> {
     .innerJoin(persons, eq(memories.personId, persons.id))
     .where(eq(memories.id, memoryId))
     .limit(1);
-  if (!rows[0] || rows[0].treeId !== treeId) return;
+  if (!rows[0] || rows[0].treeId !== treeId)
+    return fail("That memory is no longer in this tree.");
 
   await db.delete(memories).where(eq(memories.id, memoryId));
   await touchTree(treeId);
   revalidateTree(treeId, personId || undefined);
+  return OK;
 }
 
 export async function getPersonInTree(
