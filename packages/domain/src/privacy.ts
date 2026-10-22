@@ -78,6 +78,30 @@ export function fieldScope(person: Person, field: string): VisibilityScope {
   return person.fieldVisibility[field] ?? defaultFieldScope(person, field);
 }
 
+export const VISIBILITY_SCOPES: ReadonlyArray<{ id: VisibilityScope; label: string; description: string }> = [
+  { id: 'private', label: 'Only me', description: 'Just you and anyone managing your profile.' },
+  { id: 'selected', label: 'Selected relatives', description: 'Only relatives you name individually.' },
+  { id: 'immediate-family', label: 'Immediate family', description: 'Parents, children, siblings and partners.' },
+  { id: 'family-space', label: 'Entire family space', description: 'Everyone invited to this family.' },
+  { id: 'link', label: 'Anyone with the private link', description: 'People you send a private link to.' },
+  { id: 'public', label: 'Public', description: 'Never allowed for a living person.' },
+];
+
+export function isVisibilityScope(value: unknown): value is VisibilityScope {
+  return VISIBILITY_SCOPES.some((scope) => scope.id === value);
+}
+
+/** Fields whose visibility a person can configure in the UI, with a readable label. */
+export const CONFIGURABLE_FIELDS: ReadonlyArray<{ field: string; label: string }> = [
+  { field: 'birthDate', label: 'Exact birth date' },
+  { field: 'birthPlace', label: 'Birth place' },
+  { field: 'placesLived', label: 'Places lived' },
+  { field: 'biography', label: 'Biography' },
+  { field: 'photoUrl', label: 'Photograph' },
+  { field: 'deathDate', label: 'Date of death' },
+  { field: 'familyName', label: 'Family name' },
+];
+
 const SCOPE_RANK: Readonly<Record<VisibilityScope, number>> = {
   private: 0,
   selected: 1,

@@ -143,6 +143,25 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 6 — Privacy controls, tree readability, account deletion ✅
+
+**Goal:** privacy is a product surface, not a settings dump, and the chart stays readable as families grow.
+
+**Shipped**
+- Domain: `canChangeVisibility` (owner or custodian only — an administrator may not widen or narrow a living person's fields), `VISIBILITY_SCOPES` with honest labels, `CONFIGURABLE_FIELDS`, and `isVisibilityScope` validation. Tested.
+- API:
+  - `PATCH /people/:id/visibility` — separate route so authority is explicit; rejects unknown scopes and refuses `public` for any living person.
+  - `GET/POST/DELETE /hidden-branches` — a member can hide a subtree **from their own view only**; nothing is deleted, and the hidden branch is invisible in the tree, search, counts, and relationship answers (returns the same 404 as a person who was never recorded).
+  - `DELETE /account` — removes the account and contact details, unclaims profiles, and reports exactly what is retained and why.
+- UI: a Privacy screen with per-field audience selectors, hidden-branch management, scoped export download, and account deletion; a notification bell was already added in Step 5.
+- Tree: compact/detailed toggle and in-branch search that dims non-matching people instead of hiding them, so the shape of the family stays visible.
+
+**Verification:** **113 tests passing** (75 domain + 38 API), typecheck clean, web build clean. The hidden-branch test asserts the important property: the same 404 for a hidden person as for a person who never existed.
+
+**Deviation:** the visibility selector shows a *default* value derived from `hiddenFields` rather than the stored override, because the API does not return another person's `fieldVisibility` map. Reading your own configuration back is a small API addition for the next pass; the current behaviour never misrepresents what others can see, only which scope you previously chose.
+
+---
+
 <!-- NEXT STEPS APPENDED BELOW -->
 
 ---
@@ -155,7 +174,7 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [ ] F-1.1 Authentication — `MUST` *(demo persona sessions only; real OTP/email delivery pending)*
 - [ ] F-1.2 Personal profile + partial dates — `MUST`
 - [ ] F-1.3 Alternative names — `SHOULD`
-- [ ] F-1.4 Account deletion and export — `MUST`
+- [x] F-1.4 Account deletion and export — `MUST`
 
 ### E2 — Family space and tree creation
 - [x] F-2.1 Create a family space — `MUST`
@@ -173,9 +192,9 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [x] F-3.2 Zoom, pan, layout — `MUST`
 - [x] F-3.3 Expand and collapse branches — `MUST` *(depth controls; per-node collapse pending)*
 - [x] F-3.4 Generation navigation — `MUST` *(focus + depth controls; keyboard tree navigation pending)*
-- [ ] F-3.5 Compact vs detailed view — `SHOULD`
+- [x] F-3.5 Compact vs detailed view — `SHOULD`
 - [x] F-3.6 Accessible list fallback — `MUST`
-- [ ] F-3.7 Search within the tree — `SHOULD`
+- [x] F-3.7 Search within the tree — `SHOULD`
 
 ### E4 — Invitations and claiming
 - [x] F-4.1 Shareable invite link — `MUST`
@@ -196,8 +215,8 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 
 ### E6 — Privacy and visibility
 - [x] F-6.1 Private by default — `MUST`
-- [x] F-6.2 Field-level visibility — `MUST` *(domain projection + tests)*
-- [x] F-6.3 Hidden branches and blocked users — `MUST` *(domain gates + tests)*
+- [x] F-6.2 Field-level visibility — `MUST` *(projection, authoring UI, tests)*
+- [x] F-6.3 Hidden branches and blocked users — `MUST` *(gates, authoring UI, tests)*
 - [x] F-6.4 Separation and removal requests — `MUST` *(API)*
 - [x] F-6.5 Minors — `MUST` *(projection + tests)*
 - [ ] F-6.6 Photo permissions — `SHOULD`
@@ -237,7 +256,7 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | S3 — See it | Tree focus view, zoom/pan, expand/collapse, list fallback | ✅ |
 | S4 — Invite it | Invitations, claim flow, onboarding | ✅ |
 | S5 — Share it | Roles, proposals, activity log, disputes | ✅ |
-| S6 — Trust it | Field-level privacy, hidden branches, separation, minors | 🟨 hidden-branch authoring UI pending |
+| S6 — Trust it | Field-level privacy, hidden branches, separation, minors | ✅ |
 | S7 — Harden | Search, duplicates, export, i18n, a11y, tree health | ⬜ |
 
 ---
@@ -263,3 +282,4 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | 3 | ✅ clean | ✅ 81 passing | ✅ web build 268 kB (82 kB gzip) | Dev servers exercised over HTTP |
 | 4 | ✅ clean | ✅ 81 passing | ✅ | Onboarding flow exercised end-to-end on a throwaway store |
 | 5 | ✅ clean | ✅ 100 passing | ✅ web build 284 kB (86 kB gzip) | Dispute and revert flows exercised live |
+| 6 | ✅ clean | ✅ 113 passing | ✅ web build 292 kB (88 kB gzip) | Hidden-branch isolation asserted by test |

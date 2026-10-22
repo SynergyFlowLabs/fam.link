@@ -16,6 +16,7 @@ import { InvitationsView } from './views/InvitationsView.js';
 import { InviteView } from './views/InviteView.js';
 import { Onboarding } from './views/Onboarding.js';
 import { PeopleView } from './views/PeopleView.js';
+import { PrivacyView } from './views/PrivacyView.js';
 import { ProfilePanel, TreeView } from './views/TreeView.js';
 
 /**
@@ -112,6 +113,7 @@ export default function App() {
           ['calculator', 'Relationship'],
           ['invitations', 'Invitations'],
           ['activity', 'Activity'],
+          ['privacy', 'Privacy'],
         ].map(([key, label]) => (
           <a
             key={key}
@@ -196,6 +198,14 @@ export default function App() {
           {page === 'invitations' ? <InvitationsView spaceId={activeSpaceId} /> : null}
 
           {page === 'activity' ? <ActivityView spaceId={activeSpaceId} /> : null}
+
+          {page === 'privacy' ? (
+            <PrivacyView
+              spaceId={activeSpaceId}
+              personId={membership?.personId}
+              onSignOut={() => void api.signOut().then(session.reload)}
+            />
+          ) : null}
 
           {selectedPersonId && page === 'people' ? (
             <div style={{ marginTop: 'var(--sp-4)' }}>

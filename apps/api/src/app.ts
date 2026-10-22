@@ -18,8 +18,10 @@ import {
   canInvite,
   canMerge,
   canManageMembers,
+  canChangeVisibility,
   canRequestSeparation,
   canViewField,
+  isVisibilityScope,
   conflictingProposals,
   groupProposals,
   planDecision,
@@ -1357,6 +1359,169 @@ export function createApp(): express.Express {
   });
 
   // ---------------------------------------------------------------- activity, export, health
+
+  /**
+   * Visibility is edited through its own route so authority can be checked once, explicitly.
+   * PATCH /people would otherwise treat visibility like any other open field.
+   */
+  app.patch('/api/spaces/:spaceId/people/:personId/visibility', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor, userId } = ctx as Required<Context>;
+    const person = findPerson(store, spaceId, request.params.personId!);
+    if (!person || !actor) {
+      response.status(404).json({ error: 'Person not found.' });
+      return;
+    }
+    const decision = canChangeVisibility(actor, person);
+    if (!decision.allowed) {
+      response.status(403).json({ error: decision.reason });
+      return;
+    }
+
+    const body = request.body as { field?: string; scope?: string };
+    if (!body.field || !isVisibilityScope(body.scope)) {
+      response.status(400).json({ error: 'A field and a valid visibility scope are required.' });
+      return;
+    }
+    if (body.scope === 'public' && person.livingStatus === 'living') {
+      response.status(422).json({ error: 'A living person can never be made public.' });
+      return;
+    }
+
+    const previous = person.fieldVisibility[body.field];
+    (person as unknown as { fieldVisibility: Record<string, string> }).fieldVisibility = {
+      ...person.fieldVisibility,
+      [body.field]: body.scope,
+    };
+    (person as unknown as { updatedAt: string }).updatedAt = nowIso();
+    recordActivity(store, {
+      spaceId,
+      kind: 'visibility.changed',
+      actorUserId: userId,
+      personId: person.id,
+      summary: `${userById(store, userId)?.name ?? 'A member'} set ${body.field} visibility to “${body.scope}”`,
+      field: body.field,
+      before: previous,
+      after: body.scope,
+    });
+    saveStore();
+    response.json({ ok: true, fieldVisibility: person.fieldVisibility });
+  });
+
+  app.get('/api/spaces/:spaceId/hidden-branches', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, userId, viewer } = ctx as Required<Context>;
+    const index = indexGraph(spaceGraph(store, spaceId));
+    const branches = store.hiddenBranches
+      .filter((branch) => branch.spaceId === spaceId && branch.viewerUserId === userId)
+      .map((branch) => {
+        const person = index.persons.get(branch.rootPersonId);
+        return {
+          rootPersonId: branch.rootPersonId,
+          name: person ? displayName(person) : 'Unknown',
+          relationship: person && viewer.viewerPersonId
+            ? calculateRelationship(index, viewer.viewerPersonId, person.id, {
+                allow: visibilityGate(index, viewer),
+              }).term
+            : undefined,
+        };
+      });
+    response.json({ branches });
+  });
+
+  app.post('/api/spaces/:spaceId/hidden-branches', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, userId } = ctx as Required<Context>;
+    const { rootPersonId } = request.body as { rootPersonId?: string };
+    if (!rootPersonId || !findPerson(store, spaceId, rootPersonId)) {
+      response.status(404).json({ error: 'Person not found.' });
+      return;
+    }
+    if (
+      store.hiddenBranches.some(
+        (branch) => branch.spaceId === spaceId && branch.viewerUserId === userId && branch.rootPersonId === rootPersonId,
+      )
+    ) {
+      response.status(409).json({ error: 'That branch is already hidden from you.' });
+      return;
+    }
+    store.hiddenBranches.push({ spaceId, viewerUserId: userId, rootPersonId });
+    recordActivity(store, {
+      spaceId,
+      kind: 'visibility.changed',
+      actorUserId: userId,
+      personId: rootPersonId,
+      summary: `${userById(store, userId)?.name ?? 'A member'} hid a branch from their own view`,
+    });
+    saveStore();
+    response.status(201).json({ ok: true });
+  });
+
+  app.delete('/api/spaces/:spaceId/hidden-branches/:personId', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, userId } = ctx as Required<Context>;
+    store.hiddenBranches = store.hiddenBranches.filter(
+      (branch) =>
+        !(branch.spaceId === spaceId && branch.viewerUserId === userId && branch.rootPersonId === request.params.personId),
+    );
+    saveStore();
+    response.json({ ok: true });
+  });
+
+  /**
+   * Account deletion (F-1.4). Contributors' structural facts are retained deliberately: erasing a
+   * relationship someone else relies on is not the same as erasing the person who recorded it.
+   */
+  app.delete('/api/account', (request, response) => {
+    const store = loadStore();
+    const userId = sessionUser(store, request);
+    if (!userId) {
+      response.status(401).json({ error: 'Sign in to continue.' });
+      return;
+    }
+    const user = userById(store, userId);
+    const claimedPeople = store.persons.filter((person) => person.claimedByUserId === userId);
+    const retained = claimedPeople.length;
+    for (const person of claimedPeople) {
+      (person as unknown as { claimedByUserId?: string }).claimedByUserId = undefined;
+      (person as unknown as { custodianUserId?: string }).custodianUserId = undefined;
+    }
+    store.memberships = store.memberships.map((membership) =>
+      membership.userId === userId ? { ...membership, status: 'removed' } : membership,
+    );
+    store.users = store.users.filter((candidate) => candidate.id !== userId);
+    saveStore();
+    response.clearCookie(SESSION_COOKIE, { path: '/' });
+    response.json({
+      ok: true,
+      removed: { account: true, contactDetails: true },
+      retained: {
+        peopleProfiles: retained,
+        note: 'Profiles you created remain in the family tree, unclaimed, because relatives rely on those relationships. Ask an administrator to remove a profile if it should not exist.',
+      },
+      user: user?.name,
+    });
+  });
 
   app.get('/api/spaces/:spaceId/notifications', (request, response) => {
     const spaceId = request.params.spaceId!;

@@ -99,6 +99,12 @@ export interface Notification {
   action?: string;
 }
 
+export interface VisibilityScope {
+  id: string;
+  label: string;
+  description: string;
+}
+
 export interface DisputeGroup {
   personId: string;
   field: string;
@@ -254,6 +260,28 @@ export const api = {
   disputes: (spaceId: string) => call<{ disputes: DisputeGroup[] }>(`/api/spaces/${spaceId}/disputes`),
   revertActivity: (spaceId: string, activityId: string) =>
     call<{ ok: true }>(`/api/spaces/${spaceId}/activity/${activityId}/revert`, { method: 'POST', body: '{}' }),
+  setVisibility: (spaceId: string, personId: string, field: string, scope: string) =>
+    call<{ ok: true; fieldVisibility: Record<string, string> }>(
+      `/api/spaces/${spaceId}/people/${personId}/visibility`,
+      { method: 'PATCH', body: JSON.stringify({ field, scope }) },
+    ),
+  hiddenBranches: (spaceId: string) =>
+    call<{ branches: Array<{ rootPersonId: string; name: string; relationship?: string }> }>(
+      `/api/spaces/${spaceId}/hidden-branches`,
+    ),
+  hideBranch: (spaceId: string, rootPersonId: string) =>
+    call<{ ok: true }>(`/api/spaces/${spaceId}/hidden-branches`, {
+      method: 'POST',
+      body: JSON.stringify({ rootPersonId }),
+    }),
+  unhideBranch: (spaceId: string, rootPersonId: string) =>
+    call<{ ok: true }>(`/api/spaces/${spaceId}/hidden-branches/${rootPersonId}`, { method: 'DELETE' }),
+  deleteAccount: () =>
+    call<{
+      ok: true;
+      removed: { account: boolean; contactDetails: boolean };
+      retained: { peopleProfiles: number; note: string };
+    }>('/api/account', { method: 'DELETE' }),
   report: (spaceId: string, personId: string, reason: string) =>
     call<{ ok: true }>(`/api/spaces/${spaceId}/reports`, {
       method: 'POST',

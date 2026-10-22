@@ -152,6 +152,24 @@ export function canRequestSeparation(actor: Actor, person: Person): Decision {
   return deny('Only the person, their custodian, or an administrator can request separation.');
 }
 
+/**
+ * Visibility is self-owned. A custodian may set it for a dependent; an administrator may not
+ * publish a living person's fields against their will (ADR 0003).
+ */
+export function canChangeVisibility(actor: Actor, person: Person): Decision {
+  if (isOwner(actor, person)) return allow('direct', 'You own this profile, so you decide who sees what.');
+  if (isCustodian(actor, person) && !person.claimedByUserId) {
+    return allow('direct', 'You manage this profile while it is unclaimed.');
+  }
+  if (isAdmin(actor) && person.livingStatus !== 'living') {
+    return allow('direct', 'An administrator may adjust visibility for a deceased person’s record.');
+  }
+  if (isAdmin(actor)) {
+    return deny('Only the person themselves can change a living person’s visibility.');
+  }
+  return deny('Only the profile owner or their custodian can change visibility.');
+}
+
 /** Admin-only space management. */
 export function canManageMembers(actor: Actor): Decision {
   return isAdmin(actor)

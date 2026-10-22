@@ -34,6 +34,8 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
 
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
   const [outline, setOutline] = useState(false);
+  const [detailed, setDetailed] = useState(true);
+  const [treeSearch, setTreeSearch] = useState('');
   const dragging = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const canvas = useRef<HTMLDivElement>(null);
 
@@ -120,6 +122,14 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
             >
               {outline ? 'Show chart' : 'Show outline'}
             </button>
+            <button
+              type="button"
+              className="btn btn--quiet"
+              aria-pressed={!detailed}
+              onClick={() => setDetailed((value) => !value)}
+            >
+              {detailed ? 'Compact' : 'Detailed'}
+            </button>
             <button type="button" className="btn btn--primary" onClick={() => onAddRelative()}>
               Add a relative
             </button>
@@ -135,6 +145,20 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
             onFocus={onFocus}
           />
         ) : (
+        <>
+        <div className="field" style={{ maxWidth: 320, marginBottom: 'var(--sp-2)' }}>
+          <label htmlFor="tree-search" className="visually-hidden">
+            Find a person in this view
+          </label>
+          <input
+            id="tree-search"
+            type="search"
+            placeholder="Find in this branch…"
+            value={treeSearch}
+            onChange={(event) => setTreeSearch(event.target.value)}
+          />
+        </div>
+
         <div
           className="tree-canvas"
           ref={canvas}
@@ -201,7 +225,17 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
                   className={`node${person.id === tree.data!.focusId ? ' node--focus' : ''}${
                     person.livingStatus === 'deceased' ? ' node--deceased' : ''
                   }`}
-                  style={{ left: positioned.x, top: positioned.y }}
+                  style={{
+                    left: positioned.x,
+                    top: positioned.y,
+                    opacity:
+                      treeSearch.trim() === '' ||
+                      `${person.givenName} ${person.familyName ?? ''}`
+                        .toLowerCase()
+                        .includes(treeSearch.trim().toLowerCase())
+                        ? 1
+                        : 0.32,
+                  }}
                   onClick={() => onSelect(person.id)}
                   onDoubleClick={() => onFocus(person.id)}
                   aria-label={`${displayName(person)}, ${person.relationshipToViewer ?? 'relative'}. Select for details.`}
@@ -211,6 +245,7 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
                     <span className="node__name">{displayName(person)}</span>
                     <span className="node__meta">
                       {lifeSpan(person) || (person.livingStatus === 'living' ? 'living' : 'dates unknown')}
+                      {detailed && person.birthPlace ? ` · ${person.birthPlace}` : ''}
                     </span>
                     {person.relationshipToViewer ? <span className="node__rel">{person.relationshipToViewer}</span> : null}
                   </span>
@@ -262,6 +297,7 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
             {tree.data.hiddenCount > 0 ? ` · ${tree.data.hiddenCount} outside this view` : ''}
           </div>
         </div>
+        </>
         )}
       </div>
 
