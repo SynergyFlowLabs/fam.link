@@ -1348,15 +1348,35 @@ export function createApp(): express.Express {
     Object.assign(survivor as unknown as Record<string, unknown>, plan.fields);
     (survivor as unknown as { updatedAt: string }).updatedAt = nowIso();
 
+    const survivorBefore: Record<string, unknown> = {};
+    for (const field of Object.keys(plan.fields)) {
+      survivorBefore[field] = (survivor as unknown as Record<string, unknown>)[field] ?? null;
+    }
+
+    const movedRelationshipIds: string[] = [];
     for (const relationship of store.relationships) {
       if (relationship.fromPersonId === absorbed.id) {
+        movedRelationshipIds.push(relationship.id);
         (relationship as unknown as { fromPersonId: string }).fromPersonId = survivor.id;
       }
       if (relationship.toPersonId === absorbed.id) {
+        movedRelationshipIds.push(relationship.id);
         (relationship as unknown as { toPersonId: string }).toPersonId = survivor.id;
       }
     }
     (absorbed as unknown as { mergedIntoId: string }).mergedIntoId = survivor.id;
+
+    store.merges.push({
+      id: nextId(store, 'merge'),
+      spaceId,
+      survivorId: survivor.id,
+      absorbedId: absorbed.id,
+      mergedByUserId: userId,
+      mergedAt: nowIso(),
+      survivorBefore,
+      absorbedSnapshot: JSON.parse(JSON.stringify(absorbed)) as Record<string, unknown>,
+      movedRelationshipIds: [...new Set(movedRelationshipIds)],
+    });
 
     recordActivity(store, {
       spaceId,
@@ -1368,6 +1388,130 @@ export function createApp(): express.Express {
     });
     saveStore();
     response.json({ survivor: projectPerson(indexGraph(spaceGraph(store, spaceId)), viewer, survivor), plan });
+  });
+
+  /**
+   * Undo a merge. The merge log holds the survivor's previous values and the absorbed record, so
+   * reversal restores both records and re-points the moved edges. Anything added to the survivor
+   * after the merge is kept: reversal restores what the merge changed, it does not roll back time.
+   */
+  app.post('/api/spaces/:spaceId/duplicates/merges/:mergeId/revert', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor, userId } = ctx as Required<Context>;
+    const entry = store.merges.find((merge) => merge.id === request.params.mergeId && merge.spaceId === spaceId);
+    if (!entry) {
+      response.status(404).json({ error: 'Merge not found.' });
+      return;
+    }
+    if (!actor || !canManageMembers(actor).allowed) {
+      response.status(403).json({ error: 'Only family administrators can undo a merge.' });
+      return;
+    }
+    if (entry.revertedAt) {
+      response.status(409).json({ error: 'That merge has already been undone.' });
+      return;
+    }
+    const survivor = findPerson(store, spaceId, entry.survivorId);
+    const absorbed = findPerson(store, spaceId, entry.absorbedId);
+    if (!survivor || !absorbed) {
+      response.status(404).json({ error: 'One of the merged records no longer exists.' });
+      return;
+    }
+
+    // Restore only the fields the merge actually wrote, and only if nobody has edited them since.
+    const restored: string[] = [];
+    const skipped: string[] = [];
+    for (const [field, previous] of Object.entries(entry.survivorBefore)) {
+      const current = (survivor as unknown as Record<string, unknown>)[field] ?? null;
+      const merged = (entry.absorbedSnapshot as Record<string, unknown>)[field] ?? null;
+      const unchangedSinceMerge =
+        current === merged ||
+        (merged === null && current === null) ||
+        JSON.stringify(current) === JSON.stringify(merged);
+      if (!unchangedSinceMerge) {
+        skipped.push(field);
+        continue;
+      }
+      (survivor as unknown as Record<string, unknown>)[field] = previous ?? undefined;
+      restored.push(field);
+    }
+    (survivor as unknown as { updatedAt: string }).updatedAt = nowIso();
+
+    const movedIds = new Set(entry.movedRelationshipIds);
+    let repointed = 0;
+    for (const relationship of store.relationships) {
+      if (!movedIds.has(relationship.id)) continue;
+      if (relationship.fromPersonId === survivor.id && relationship.toPersonId === absorbed.id) continue;
+      // Only move an edge back if the absorbed record is not already connected that way.
+      const duplicateOfExisting = store.relationships.some(
+        (other) =>
+          other.id !== relationship.id &&
+          other.spaceId === relationship.spaceId &&
+          other.kind === relationship.kind &&
+          ((other.fromPersonId === relationship.toPersonId && other.toPersonId === absorbed.id) ||
+            (other.fromPersonId === absorbed.id && other.toPersonId === relationship.toPersonId)),
+      );
+      if (duplicateOfExisting) continue;
+      if (relationship.fromPersonId === survivor.id) {
+        (relationship as unknown as { fromPersonId: string }).fromPersonId = absorbed.id;
+        repointed += 1;
+      } else if (relationship.toPersonId === survivor.id) {
+        (relationship as unknown as { toPersonId: string }).toPersonId = absorbed.id;
+        repointed += 1;
+      }
+    }
+
+    (absorbed as unknown as { mergedIntoId?: string }).mergedIntoId = undefined;
+    (absorbed as unknown as { updatedAt: string }).updatedAt = nowIso();
+    (entry as unknown as { revertedAt: string }).revertedAt = nowIso();
+    (entry as unknown as { revertedByUserId: string }).revertedByUserId = userId;
+
+    recordActivity(store, {
+      spaceId,
+      kind: 'duplicate.merge.reverted',
+      actorUserId: userId,
+      personId: survivor.id,
+      summary: `${userById(store, userId)?.name ?? 'A member'} undid a merge between ${displayName(survivor)} and ${displayName(absorbed)}`,
+      after: { restored, skipped, repointed, absorbed: absorbed.id },
+    });
+    saveStore();
+    response.json({ ok: true, restored, skipped, repointed, note: skipped.length > 0 ? 'Fields edited after the merge were left alone.' : undefined });
+  });
+
+  /** Merge history, so an administrator can see what was combined and undo it. */
+  app.get('/api/spaces/:spaceId/duplicates/merges', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor } = ctx as Required<Context>;
+    if (!actor || !canManageMembers(actor).allowed) {
+      response.status(403).json({ error: 'Only family administrators can review merges.' });
+      return;
+    }
+    response.json({
+      merges: store.merges
+        .filter((merge) => merge.spaceId === spaceId)
+        .slice()
+        .reverse()
+        .map((merge) => ({
+          id: merge.id,
+          survivorId: merge.survivorId,
+          absorbedId: merge.absorbedId,
+          mergedAt: merge.mergedAt,
+          mergedBy: store.users.find((user) => user.id === merge.mergedByUserId)?.name,
+          revertedAt: merge.revertedAt,
+          survivorName: store.persons.find((person) => person.id === merge.survivorId)?.givenName,
+          absorbedName: store.persons.find((person) => person.id === merge.absorbedId)?.givenName,
+        })),
+    });
   });
 
   // ---------------------------------------------------------------- activity, export, health

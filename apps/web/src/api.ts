@@ -251,6 +251,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ survivorId, absorbedId }),
     }),
+  merges: (spaceId: string) =>
+    call<{
+      merges: Array<{
+        id: string;
+        survivorId: string;
+        absorbedId: string;
+        mergedAt: string;
+        mergedBy?: string;
+        revertedAt?: string;
+        survivorName?: string;
+        absorbedName?: string;
+      }>;
+    }>(`/api/spaces/${spaceId}/duplicates/merges`),
+  revertMerge: (spaceId: string, mergeId: string) =>
+    call<{ ok: true; restored: string[]; skipped: string[]; repointed: number; note?: string }>(
+      `/api/spaces/${spaceId}/duplicates/merges/${mergeId}/revert`,
+      { method: 'POST' },
+    ),
   dismissDuplicate: (spaceId: string, personId: string, candidateId: string) =>
     call<{ ok: true }>(`/api/spaces/${spaceId}/duplicates/dismiss`, {
       method: 'POST',

@@ -208,6 +208,30 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 10 — Undo for the only destructive operation ✅
+
+**Goal:** merging is the one action that hides a record and rewrites edges. Until now it was one-way,
+so a mistaken merge meant rebuilding a person by hand.
+
+**Shipped**
+- `store.merges` — a merge log holding the survivor's previous field values, a full snapshot of the
+  absorbed record, and the ids of every relationship the merge re-pointed.
+- `POST /duplicates/merges/:id/revert` (administrators only). Reversal restores both records and
+  re-points the moved edges, but **skips any field edited after the merge** and says so, rather than
+  silently discarding later work. It also refuses to create an edge that already exists, and a
+  second undo returns 409.
+- `GET /duplicates/merges` — merge history with who did it and whether it was undone.
+- People screen: merge history with an **Undo merge** action; the confirmation after merging now
+  says the record is recoverable because that is true.
+- `loadStore` normalises an older `store.json` instead of crashing on a collection added since.
+- `apps/api/src/merge-revert.test.ts` — clean undo (edges restored, no duplicate edges, second undo
+  rejected), undo after a later edit (field preserved, `skipped` reported), and contributor refusal.
+
+**Verification:** **123 tests passing** (75 domain + 44 API + 4 i18n), typecheck clean, web build
+297 kB (89 kB gzip). F-8.3 closed.
+
+---
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.
@@ -217,7 +241,7 @@ Ordered by the MVP's actual question — *will relatives collaborate?* — not b
 | 1 | Real authentication (email magic link + phone OTP) and rate limiting | F-1.1 | The demo persona switcher is the single largest gap between this and a beta |
 | 2 | Invitation delivery (email + WhatsApp send) with bounce/opt-out handling | F-4.2 | Links are generated but never sent, so the loop cannot be measured in the wild |
 | 3 | ~~Read back your own visibility configuration~~ | F-6.2 | ✅ Step 9 |
-| 4 | Merge reversal from the merge log | F-8.3 | Merges are implemented and conflict-aware but not yet undoable |
+| 4 | ~~Merge reversal from the merge log~~ | F-8.3 | ✅ Step 10 |
 | 5 | Notification preferences and a real outbox for delivery | F-9.3 | Derived feed works in-product; delivery needs an idempotent outbox (ADR 0004) |
 | 6 | Full localisation of screen bodies, dialogs, invite copy | F-9.2 | Shell and tree are done; the rest is English |
 | 7 | Per-node branch collapse and keyboard-first tree navigation | F-3.3, F-3.4 | Depth controls exist; the chart is not yet fully keyboard-operable |

@@ -3,6 +3,8 @@ import { api, displayName, lifeSpan, type DuplicateCandidate, type PersonView } 
 import { Avatar, Chip, Empty, Notice } from '../components/ui.js';
 import { useAsync } from '../hooks.js';
 
+type MergeHistoryEntry = Awaited<ReturnType<typeof api.merges>>['merges'][number];
+
 interface PeopleViewProps {
   spaceId: string;
   onSelect: (personId: string) => void;
@@ -21,7 +23,9 @@ export function PeopleView({ spaceId, onSelect, onFocus, canManage }: PeopleView
 
   const people = useAsync(() => api.people(spaceId, debounced), [spaceId, debounced]);
   const duplicates = useAsync(() => api.duplicates(spaceId), [spaceId]);
+  const merges = useAsync(() => (canManage ? api.merges(spaceId) : Promise.resolve({ merges: [] })), [spaceId, canManage]);
 
+  const mergeHistory = merges.data?.merges ?? [];
   const results = people.data?.results ?? [];
   const living = people.data?.living ?? [];
   const deceased = people.data?.deceased ?? [];
@@ -108,12 +112,80 @@ export function PeopleView({ spaceId, onSelect, onFocus, canManage }: PeopleView
               key={candidate.key}
               candidate={candidate}
               canManage={canManage}
-              onResolved={duplicates.reload}
+              onResolved={() => {
+                duplicates.reload();
+                merges.reload();
+              }}
               onSelect={onSelect}
             />
           ))}
         </div>
       </div>
+
+      {mergeHistory.length > 0 ? (
+        <div>
+          <div className="section-title">
+            <h3 style={{ fontSize: 'var(--step-1)' }}>Merge history</h3>
+            <span className="hint">Every merge can be undone once</span>
+          </div>
+          <div className="list">
+            {mergeHistory.map((merge) => (
+              <MergeRow key={merge.id} spaceId={spaceId} merge={merge} canManage={canManage} onDone={merges.reload} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MergeRow({
+  spaceId,
+  merge,
+  canManage,
+  onDone,
+}: {
+  spaceId: string;
+  merge: MergeHistoryEntry;
+  canManage: boolean;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const undo = async () => {
+    setBusy(true);
+    try {
+      const result = await api.revertMerge(spaceId, merge.id);
+      setMessage(result.note ?? 'Merge undone. Both records are back.');
+      onDone();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not undo that merge.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="row">
+      <div className="row__main">
+        <div className="row__subject">
+          {merge.survivorName ?? 'record'} absorbed {merge.absorbedName ?? 'a duplicate'}
+        </div>
+        <div className="row__sub">
+          {merge.mergedBy ? `${merge.mergedBy}, ` : ''}
+          {new Date(merge.mergedAt).toLocaleString()}
+          {merge.revertedAt ? ` · undone ${new Date(merge.revertedAt).toLocaleString()}` : ''}
+        </div>
+        {message ? <div className="hint">{message}</div> : null}
+      </div>
+      {canManage && !merge.revertedAt ? (
+        <div className="row__actions">
+          <button type="button" className="btn small" disabled={busy} onClick={() => void undo()}>
+            Undo merge
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

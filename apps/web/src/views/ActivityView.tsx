@@ -17,6 +17,7 @@ const KIND_LABEL: Record<string, string> = {
   'invitation.accepted': 'joined',
   'invitation.revoked': 'revoked',
   'duplicate.merged': 'merged',
+  'duplicate.merge.reverted': 'merge undone',
   'member.joined': 'joined',
 };
 

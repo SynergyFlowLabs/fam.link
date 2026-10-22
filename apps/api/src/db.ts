@@ -47,6 +47,25 @@ export interface Report {
   readonly createdAt: string;
 }
 
+/**
+ * A merge is the one operation in the MVP that destroys a record, so it is logged with everything
+ * needed to undo it: the survivor's previous field values, the absorbed record as it was, and the
+ * edges that were moved. Reversal is a real operation, not a best-effort guess.
+ */
+export interface MergeLogEntry {
+  readonly id: Id;
+  readonly spaceId: Id;
+  readonly survivorId: Id;
+  readonly absorbedId: Id;
+  readonly mergedByUserId: Id;
+  readonly mergedAt: string;
+  readonly survivorBefore: Record<string, unknown>;
+  readonly absorbedSnapshot: Record<string, unknown>;
+  readonly movedRelationshipIds: Id[];
+  readonly revertedAt?: string;
+  readonly revertedByUserId?: Id;
+}
+
 export interface Store {
   users: User[];
   spaces: FamilySpace[];
@@ -59,6 +78,7 @@ export interface Store {
   hiddenBranches: HiddenBranch[];
   dismissedDuplicates: DismissedDuplicate[];
   reports: Report[];
+  merges: MergeLogEntry[];
   nextId: number;
 }
 
@@ -72,10 +92,23 @@ export function repositoryPath(): string {
   return storeFile;
 }
 
+/**
+ * A JSON store written by an older build is missing collections added since. Filling them in on
+ * load keeps a developer's local data usable instead of failing on the first `store.merges.push`.
+ */
+function normalizeStore(store: Store): Store {
+  const collections = ['users', 'spaces', 'memberships', 'persons', 'relationships', 'proposals', 'activity', 'invitations', 'hiddenBranches', 'dismissedDuplicates', 'reports', 'merges'] as const;
+  for (const key of collections) {
+    if (!Array.isArray(store[key])) (store as unknown as Record<string, unknown>)[key] = [];
+  }
+  if (typeof store.nextId !== 'number') (store as unknown as { nextId: number }).nextId = 1;
+  return store;
+}
+
 export function loadStore(): Store {
   if (cache) return cache;
   if (existsSync(storeFile)) {
-    cache = JSON.parse(readFileSync(storeFile, 'utf8')) as Store;
+    cache = normalizeStore(JSON.parse(readFileSync(storeFile, 'utf8')) as Store);
     return cache;
   }
   cache = seedStore();
