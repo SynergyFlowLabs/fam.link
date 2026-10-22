@@ -35,11 +35,11 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 | 1.4 | Person profile page: facts, edit, relationships | ✅ |
 | 1.5 | Story layer v0: text memories on any person | ✅ |
 | 1.6 | Focus person (re-root the tree), generation stats | ✅ |
-| 1.7 | Photo memories (upload + display on profile) | ⬜ |
+| 1.7 | Photo memories (upload + display on profile) | ✅ |
 | 1.8 | Read-only share links with living-person redaction | ⬜ |
 | 1.9 | GEDCOM export | ✅ |
 | 1.10 | GEDCOM import (review workflow) | ⬜ |
-| 1.11 | JSON export | ⬜ |
+| 1.11 | JSON export | ✅ |
 | 1.12 | Invite collaborators with roles | ⬜ |
 
 ## Phase 2 — Story depth
@@ -74,3 +74,4 @@ Public deceased profiles, API, family book generation, governance. Not started.
 - **2026-10-22 — Step 1.1a:** Bespoke DAG-aware layout engine (`src/lib/layout/engine.ts`): focus-relative generations (fixpoint propagation), couple-units, family clustering + recentering. 12 unit tests green (`node --test`) covering pedigree collapse, in-laws, single parents, overlap-freedom, adjacency, centering, determinism.
 - **2026-10-22 — Steps 1.1–1.6:** The canvas is live. SVG tree with pan/zoom (wheel + drag, fit/zoom controls), couple & parent-child edges, hover quick-add pills (+father/+mother/+spouse/+child) with union-slot logic, unknown placeholders, fuzzy dates, "center tree here" re-rooting, header stats. Person profile pages with facts, all relationships, edit/delete. Story layer v0: text memories with when/who-remembers. Demo account seeded (demo@fam.link / demo1234) with a 12-person, 4-generation family incl. an unknown ancestor and 5 memories. Render-verified E2E via SSR smoke tests.
 - **2026-10-22 — Step 1.9 (writer):** GEDCOM 5.5.1 writer as pure function with 8 unit tests (xref resolution, fuzzy dates verbatim, unknown persons, single-parent families, CONT continuations, UTF-8 names, memories → NOTEs).
+- **2026-10-22 — Steps 1.7 + 1.9 (routes) + 1.11:** Photo memories: upload via server action (8 MB cap, image types), stored under `data/uploads/`, served through `/api/media/[id]` with owner-only access (404 otherwise), rendered in the memory feed. GEDCOM + JSON export routes (`/app/trees/[id]/export/{gedcom,json}`) with an Export menu on the canvas header; access-controlled, verified E2E (GEDCOM: 17 records for the demo tree; JSON: full model incl. memories; no-cookie → 404).

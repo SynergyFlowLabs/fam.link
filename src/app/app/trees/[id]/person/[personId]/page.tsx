@@ -146,9 +146,11 @@ export default async function PersonPage({
           personName={name}
           initialMemories={memoryRows.map((m) => ({
             id: m.id,
+            kind: m.kind,
             body: m.body,
             occurredText: m.occurredText,
             authorName: m.authorName,
+            mediaId: m.mediaId,
             createdAt: new Date(m.createdAt).toLocaleDateString("en", {
               day: "numeric",
               month: "short",

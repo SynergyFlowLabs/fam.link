@@ -4,8 +4,12 @@ import { and, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
+import { mkdirSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import { db } from "@/db";
 import {
+  media,
   memories,
   parentChild,
   persons,
@@ -255,17 +259,52 @@ export async function addMemoryAction(formData: FormData): Promise<void> {
   await assertOwned(treeId);
   const personId = String(formData.get("personId") ?? "");
   const body = String(formData.get("body") ?? "").trim();
-  if (!personId || !body) return;
+
+  // Photo memories: an optional image turns the memory into kind=photo.
+  const photo = formData.get("photo");
+  let mediaId: string | null = null;
+  let kind: "text" | "photo" = "text";
+  if (photo instanceof File && photo.size > 0) {
+    if (!photo.type.startsWith("image/")) return;
+    if (photo.size > 8 * 1024 * 1024) return; // 8 MB cap
+    const extByMime: Record<string, string> = {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+      "image/gif": "gif",
+      "image/avif": "avif",
+    };
+    const ext = extByMime[photo.type] ?? "img";
+    mediaId = randomUUID();
+    const dir = path.join(process.cwd(), "data", "uploads");
+    mkdirSync(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, `${mediaId}.${ext}`),
+      Buffer.from(await photo.arrayBuffer()),
+    );
+    await db.insert(media).values({
+      id: mediaId,
+      treeId,
+      path: `uploads/${mediaId}.${ext}`,
+      mimeType: photo.type,
+      sizeBytes: photo.size,
+      uploadedBy: null,
+    });
+    kind = "photo";
+  }
+
+  if (!personId || (!body && kind !== "photo")) return;
 
   const occurred = String(formData.get("occurredText") ?? "").trim();
   const author = String(formData.get("authorName") ?? "").trim();
   await db.insert(memories).values({
     id: randomUUID(),
     personId,
-    kind: "text",
+    kind,
     body,
     occurredText: occurred || null,
     authorName: author || null,
+    mediaId,
   });
   await touchTree(treeId);
   revalidateTree(treeId, personId);

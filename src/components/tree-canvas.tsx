@@ -171,6 +171,34 @@ export function TreeCanvas({
           </p>
         </div>
         <div className="flex items-center gap-1.5">
+          <details className="relative">
+            <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">
+              Export
+            </summary>
+            <div className="absolute right-0 top-9 z-30 w-52 rounded-xl border border-line bg-card p-2 shadow-lg">
+              <a
+                href={`/app/trees/${treeId}/export/gedcom`}
+                className="block rounded-lg px-3 py-2 text-sm text-ink transition-colors hover:bg-evergreen-mist"
+              >
+                GEDCOM (.ged)
+                <span className="block text-xs text-ink-soft">
+                  for other genealogy apps
+                </span>
+              </a>
+              <a
+                href={`/app/trees/${treeId}/export/json`}
+                className="block rounded-lg px-3 py-2 text-sm text-ink transition-colors hover:bg-evergreen-mist"
+              >
+                JSON (.json)
+                <span className="block text-xs text-ink-soft">
+                  everything, machine-readable
+                </span>
+              </a>
+              <p className="px-3 pt-1.5 pb-1 text-[11px] leading-snug text-ink-soft">
+                Yours forever — exports always work, for every tree, free.
+              </p>
+            </div>
+          </details>
           <button
             type="button"
             onClick={() => zoom(1 / 1.25)}

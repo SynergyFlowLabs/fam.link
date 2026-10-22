@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   addMemoryAction,
   deleteMemoryAction,
@@ -110,10 +110,12 @@ export function EditPersonForm({
 
 export interface MemoryItem {
   id: string;
+  kind: "text" | "photo" | "voice";
   body: string;
   occurredText: string | null;
   authorName: string | null;
   createdAt: string;
+  mediaId: string | null;
 }
 
 export function MemorySection({
@@ -128,6 +130,7 @@ export function MemorySection({
   initialMemories: MemoryItem[];
 }) {
   const [pending, startTransition] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   return (
     <section className="rounded-2xl border border-line bg-card p-5">
@@ -146,7 +149,16 @@ export function MemorySection({
         action={(fd: FormData) => {
           startTransition(async () => {
             await addMemoryAction(fd);
+            if (fileRef.current) fileRef.current.value = "";
           });
+        }}
+        onSubmit={(e) => {
+          const body = (
+            e.currentTarget.elements.namedItem("body") as HTMLTextAreaElement
+          ).value.trim();
+          const hasFile =
+            fileRef.current?.files && fileRef.current.files.length > 0;
+          if (!body && !hasFile) e.preventDefault();
         }}
         className="mt-4 flex flex-col gap-3"
       >
@@ -155,10 +167,22 @@ export function MemorySection({
         <textarea
           name="body"
           rows={3}
-          required
           placeholder={`What do you remember about ${personName}?`}
           className={inputClass}
         />
+        <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-line bg-paper px-3 py-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">
+          <span aria-hidden>🖼️</span>
+          <span>
+            Attach a photo — old albums, that famous tandoor, anything
+          </span>
+          <input
+            ref={fileRef}
+            name="photo"
+            type="file"
+            accept="image/*"
+            className="hidden"
+          />
+        </label>
         <div className="grid grid-cols-2 gap-3">
           <input
             name="occurredText"
@@ -183,10 +207,20 @@ export function MemorySection({
       </form>
 
       {initialMemories.length > 0 && (
-        <ul className="mt-6 space-y-4">
+        <ul className="mt-6 space-y-5">
           {initialMemories.map((m) => (
             <li key={m.id} className="border-l-3 border-gold/60 pl-4">
-              <p className="text-sm leading-relaxed text-ink">{m.body}</p>
+              {m.kind === "photo" && m.mediaId && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/media/${m.mediaId}`}
+                  alt={m.body || `A photo remembered with ${personName}`}
+                  className="mb-2 max-h-72 w-auto rounded-lg border border-line"
+                />
+              )}
+              {m.body && (
+                <p className="text-sm leading-relaxed text-ink">{m.body}</p>
+              )}
               <p className="mt-1 text-xs text-ink-soft">
                 {[
                   m.occurredText,
