@@ -52,6 +52,8 @@ interface Props {
   shareNote?: string | null;
   /** Extra header controls (owner view: Share menu). */
   headerExtra?: React.ReactNode;
+  /** Owner view: link to the GEDCOM import review screen. */
+  importHref?: string | null;
 }
 
 const MIN_W = 360;
@@ -66,6 +68,7 @@ export function TreeCanvas({
   readOnly = false,
   shareNote = null,
   headerExtra = null,
+  importHref = null,
 }: Props) {
   const layout: LayoutResult = useMemo(
     () =>
@@ -245,6 +248,14 @@ export function TreeCanvas({
         </div>
         <div className="flex items-center gap-1.5">
           {!readOnly && headerExtra}
+          {!readOnly && importHref && (
+            <a
+              href={importHref}
+              className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
+            >
+              Import
+            </a>
+          )}
           {!readOnly && (
           <details className="relative">
             <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">

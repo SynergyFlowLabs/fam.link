@@ -224,6 +224,31 @@ export const shareLinks = sqliteTable(
   (t) => [index("share_links_tree_idx").on(t.treeId)],
 );
 
+/**
+ * A staged-but-unconfirmed GEDCOM import. The parsed plan is stored as JSON;
+ * nothing touches persons/unions until the owner confirms on the review
+ * screen. One pending import per tree (a new upload replaces it).
+ */
+export const pendingImports = sqliteTable(
+  "pending_imports",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    uploadedBy: text("uploaded_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    fileName: text("file_name").notNull(),
+    planJson: text("plan_json").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("pending_imports_tree_idx").on(t.treeId)],
+);
+
+
 export type User = typeof users.$inferSelect;
 export type Tree = typeof trees.$inferSelect;
 export type Person = typeof persons.$inferSelect;
