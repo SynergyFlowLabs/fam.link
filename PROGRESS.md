@@ -179,6 +179,38 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 8 — Documentation, ADR for derived notifications ✅
+
+**Shipped**
+- `docs/adr/0004-derived-notifications.md` — why notifications are computed rather than stored, including the two failure modes it prevents (drift, and privacy leakage after visibility changes) and the requirement for stable identity *and* stable time.
+- README rewritten to reflect the working demo: run instructions, demo accounts, what exists, what is deliberately missing, and the constraints carried into the code.
+
+**Verification:** `npm test` → **115 passing**; `npm run typecheck` clean; production build clean.
+
+---
+
+## 7. Remaining work, in priority order
+
+Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.
+
+| # | Item | Feature ref | Why it is next |
+|---|---|---|---|
+| 1 | Real authentication (email magic link + phone OTP) and rate limiting | F-1.1 | The demo persona switcher is the single largest gap between this and a beta |
+| 2 | Invitation delivery (email + WhatsApp send) with bounce/opt-out handling | F-4.2 | Links are generated but never sent, so the loop cannot be measured in the wild |
+| 3 | Read back your own visibility configuration | F-6.2 | The UI currently derives the current scope from `hiddenFields`; the API should return your own overrides |
+| 4 | Merge reversal from the merge log | F-8.3 | Merges are implemented and conflict-aware but not yet undoable |
+| 5 | Notification preferences and a real outbox for delivery | F-9.3 | Derived feed works in-product; delivery needs an idempotent outbox (ADR 0004) |
+| 6 | Full localisation of screen bodies, dialogs, invite copy | F-9.2 | Shell and tree are done; the rest is English |
+| 7 | Per-node branch collapse and keyboard-first tree navigation | F-3.3, F-3.4 | Depth controls exist; the chart is not yet fully keyboard-operable |
+| 8 | Cross-space person linking and a space switcher | post-MVP (D-2) | Needed once a user belongs to paternal, maternal and in-law spaces |
+| 9 | Tree health summary (missing dates, detached branches, open disputes) | F-9.5 | Cheap, and it gives families a reason to return |
+| 10 | Phase 2: memories, photographs beyond one per person, voice recordings, timeline | E9 | Only after the loop is proven |
+
+**Not to do before the loop is proven:** DNA integrations, record search, AI biographies, native
+apps, public discovery, social feeds. The MVP exit criteria in `MVP-FEATURES.md` §6 still govern.
+
+---
+
 <!-- NEXT STEPS APPENDED BELOW -->
 
 ---

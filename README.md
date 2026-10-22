@@ -106,52 +106,64 @@ Fam Link answers this with an explicit authority hierarchy (profile owner → cu
 
 ## Repository status
 
-**Working demo.** The domain, API, and web client are implemented and runnable. The family in the
-demo is synthetic — no real family data belongs in this repository.
+**Working demo.** Domain, API, and web client are implemented and runnable, with a synthetic family.
+No real family data belongs in this repository.
 
 ### Run it
 
 ```bash
 npm install
 npm run dev        # API on :8787, web on :5173 (proxies /api)
-npm test           # 81 tests across domain, API, and layout
+npm test           # 115 tests
 npm run typecheck
+npm run build      # typecheck + production build of the web client
 ```
 
 Open the web app and pick a demo account. Each persona sees a different amount of the same family,
-because privacy is enforced per field on the server:
+because privacy is enforced per field on the server.
 
 | Demo account | Role | What they see |
 |---|---|---|
-| Ayesha Khan | Family administrator | Everything, resolves proposals and duplicates |
-| Bilal Khan | Contributor (has claimed his own profile) | His branch, his own private fields, proposals awaiting approval |
-| Sadia Khan | Contributor | Her branch; other living relatives' birth dates are withheld |
+| Ayesha Khan | Family administrator | Everything; resolves proposals, disputes, duplicates |
+| Bilal Khan | Contributor (claimed) | His branch, his own private fields, changes awaiting approval |
+| Sadia Khan | Contributor | Her branch; other living relatives' birth dates withheld |
 | Ahmed Khan | Contributor (eldest generation) | His own profile and descendants |
+| Nadeem Khan | Unclaimed → can claim via invitation | The invite flow end to end |
+| Seher Khan | Unclaimed | Used to exercise claiming a second branch |
 
-Try: open **Relationship**, pick Bilal and Sara, and read the answer. Then open **Invitations** and
-open the pending invitation to Nadeem — the link shows only first names and the relationship, and
-accepting it *claims* the existing person rather than creating a second one.
+Two things worth trying:
+
+1. **Relationship** → Bilal and Sara. The answer names the path ("your father's brother's
+   daughter") and the Urdu term (چچا زاد).
+2. **Invitations** → open the pending Nadeem invitation → claim it. The profile is *claimed*, not
+   duplicated; then correct a protected field and watch a competing claim become a proposal in
+   **Activity**.
 
 ### What exists
 
 ```
-packages/domain/     pure domain logic — graph, derivation, calculator, privacy, authority, duplicates
-apps/api/            JSON-backed repository, seed family, HTTP API, privacy projection per request
-apps/web/            React + Vite client: tree, people, calculator, invitations, activity, invite page
-docs/                PRD, MVP scope, ADRs
-PROGRESS.md          step-by-step build log and feature checklist
+packages/domain/     pure logic — graph, derivation, calculator, privacy, authority,
+                     duplicates, proposals/disputes, revert planning
+apps/api/            JSON-backed repository, seed family, HTTP API, privacy projection,
+                     derived notifications
+apps/web/            React + Vite client: tree, people, calculator, invitations, activity,
+                     privacy settings, invite/claim page, onboarding, English/Urdu shell
+docs/                PRD, MVP scope, ADRs, glossary
+PROGRESS.md          step-by-step build log, checklist, decisions and deviations
 ```
 
-Implemented: family graph with derived siblings; focus-window tree with zoom, pan, and generation
-expansion; an accessible outline fallback; people search across names and scripts; profile editing
-that routes protected fields into proposals; claiming; invitations with relationship-carrying copy;
-relationship calculator with path, common ancestor, and Urdu kinship terms; duplicate detection with
-explainable signals and merge; activity log; field-level privacy; minors, blocked users, separation,
-and export; a six-step guided onboarding that builds a real tree and ends with an invitation.
+Implemented: family graph with derived siblings and cycle-safe traversal; focus-window tree with
+zoom, pan, depth controls, compact/detailed modes, in-branch search, and an accessible outline;
+people search across transliterations and scripts; profile editing that routes protected fields into
+proposals; claiming; invitations whose copy carries the relationship; relationship calculator with
+path, common ancestor and Urdu kinship terms; explainable duplicate detection with merge; disputed
+values retained with both claims; precise revert; derived notification feed; field-level privacy
+authoring; hidden branches; minors, blocked users, separation, abuse reporting, scoped export and
+account deletion; guided onboarding; English/Urdu shell with RTL.
 
-Not implemented yet, and deliberately visible as gaps: real sign-in (demo personas stand in),
-email/WhatsApp *delivery* (links are generated, not sent), memories and voice recordings (Phase 2),
-notifications, and multi-space switching in the UI.
+**Deliberately not built yet** (see `PROGRESS.md` §8): real authentication and message delivery,
+memories and voice recordings (Phase 2), notification preferences, full localisation of every
+screen, per-node branch collapsing, keyboard-first tree navigation, and a cross-space switcher.
 
 ### Where the docs are
 
@@ -160,14 +172,15 @@ notifications, and multi-space switching in the UI.
 - [`PROGRESS.md`](./PROGRESS.md) — what is built, what is next, and what changed vs. plan
 - [`docs/adr/`](./docs/adr) — binding architectural decisions
 
-### Architectural constraints carried into code
+### Constraints carried into the code
 
-- **The domain model is a graph, not a tree.** Cycle-safe traversals, multi-path relationships, and
+- **The domain model is a graph, not a tree.** Cycle-safe traversal, multi-path relationships, and
   multiple lowest common ancestors are handled in `packages/domain`.
-- **Relationship derivation lives in the domain.** The tree view and the calculator read the same
-  graph; nothing about kinship is computed in a component.
+- **Relationship derivation lives in the domain.** The chart and the calculator read one graph.
 - **Privacy is a server-side projection.** A restricted field is absent from the API response, not
-  hidden by CSS.
+  hidden with CSS, and a hidden person returns the same 404 as someone who never existed.
+- **Disagreement is data.** Conflicting claims are both retained; decisions supersede rather than
+  erase, and reverts are new changes in an append-only log.
 
 ## Roadmap
 
