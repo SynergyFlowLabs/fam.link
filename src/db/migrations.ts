@@ -45,4 +45,19 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
         "CREATE INDEX IF NOT EXISTS `pending_imports_tree_idx` ON `pending_imports` (`tree_id`);",
     ],
   },
+  {
+    // Invites & roles (1.12). Note: the ALTER TABLE is not idempotent SQL —
+    // the runner tolerates "duplicate column name" errors so re-applying to
+    // a database that already has the column is safe.
+    name: "0003_invites_roles",
+    statements: [
+        "CREATE TABLE IF NOT EXISTS `tree_members` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`user_id` text NOT NULL,\n\t`role` text NOT NULL,\n\t`invited_by` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`invited_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+        "CREATE UNIQUE INDEX IF NOT EXISTS `tree_members_tree_user_idx` ON `tree_members` (`tree_id`,`user_id`);",
+        "CREATE INDEX IF NOT EXISTS `tree_members_user_idx` ON `tree_members` (`user_id`);",
+        "CREATE TABLE IF NOT EXISTS `tree_invites` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`token` text NOT NULL,\n\t`role` text NOT NULL,\n\t`label` text,\n\t`created_by` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\t`revoked_at` integer,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+        "CREATE UNIQUE INDEX IF NOT EXISTS `tree_invites_token_unique` ON `tree_invites` (`token`);",
+        "CREATE INDEX IF NOT EXISTS `tree_invites_tree_idx` ON `tree_invites` (`tree_id`);",
+        "ALTER TABLE `memories` ADD COLUMN `author_user_id` text REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null;",
+    ],
+  },
 ];

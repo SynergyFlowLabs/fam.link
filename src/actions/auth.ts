@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { safeNextPath } from "@/lib/roles";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "@/db";
@@ -67,7 +68,7 @@ export async function signupAction(
   });
 
   await createSession({ id: userId, email });
-  redirect("/app");
+  redirect(safeNextPath(String(formData.get("next") ?? "")));
 }
 
 export async function signinAction(
@@ -90,7 +91,7 @@ export async function signinAction(
   }
 
   await createSession({ id: user.id, email: user.email });
-  redirect("/app");
+  redirect(safeNextPath(String(formData.get("next") ?? "")));
 }
 
 export async function signoutAction(): Promise<void> {

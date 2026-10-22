@@ -7,6 +7,8 @@ import { db } from "@/db";
 import { memories, parentChild, pendingImports, persons, trees, unions } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ownedTree } from "@/actions/trees";
+import { getTreeAccess } from "@/lib/access";
+import { canEdit } from "@/lib/roles";
 import { parseGedcom } from "@/lib/gedcom/parse";
 import { planImport, type ImportPlan } from "@/lib/gedcom/import";
 import type { ActionResult } from "@/lib/action-result";
@@ -18,14 +20,26 @@ const MAX_PERSONS = 20_000;
  * Stage a GEDCOM file for review: parse + plan, store the plan, and let the
  * review screen render it. Nothing is inserted into the tree yet.
  */
+/**
+ * GEDCOM import restructures the tree, so it sits with the Editor role
+ * (owner or an invited editor — both go through the review screen).
+ */
+async function editableTreeFor(
+  userId: string,
+  treeId: string,
+): ReturnType<typeof ownedTree> {
+  const access = await getTreeAccess(treeId, userId);
+  return access && canEdit(access.role) ? access.tree : null;
+}
+
 export async function stageGedcomImportAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return fail("Your session expired — sign in again.");
   const treeId = String(formData.get("treeId") ?? "");
-  const tree = await ownedTree(treeId, user.id);
-  if (!tree) return fail("That tree no longer exists.");
+  const tree = await editableTreeFor(user.id, treeId);
+  if (!tree) return fail("You don't have edit rights on that tree.");
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -108,8 +122,8 @@ export async function confirmGedcomImportAction(
   if (!user) return fail("Your session expired — sign in again.");
   const treeId = String(formData.get("treeId") ?? "");
   const importId = String(formData.get("importId") ?? "");
-  const tree = await ownedTree(treeId, user.id);
-  if (!tree) return fail("That tree no longer exists.");
+  const tree = await editableTreeFor(user.id, treeId);
+  if (!tree) return fail("You don't have edit rights on that tree.");
 
   const rows = await db
     .select()
@@ -213,8 +227,8 @@ export async function discardGedcomImportAction(
   if (!user) return fail("Your session expired — sign in again.");
   const treeId = String(formData.get("treeId") ?? "");
   const importId = String(formData.get("importId") ?? "");
-  const tree = await ownedTree(treeId, user.id);
-  if (!tree) return fail("That tree no longer exists.");
+  const tree = await editableTreeFor(user.id, treeId);
+  if (!tree) return fail("You don't have edit rights on that tree.");
 
   await db
     .delete(pendingImports)

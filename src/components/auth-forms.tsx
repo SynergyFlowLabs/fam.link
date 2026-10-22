@@ -12,6 +12,11 @@ function SubmitButton({ label }: { label: string }) {
   );
 }
 
+/** Carries the sanitized post-auth destination through the action. */
+function NextField({ next }: { next: string }) {
+  return <input type="hidden" name="next" value={next} />;
+}
+
 function ErrorNote({ error }: { error?: string }) {
   if (!error) return null;
   return (
@@ -21,7 +26,7 @@ function ErrorNote({ error }: { error?: string }) {
   );
 }
 
-export function SignUpForm() {
+export function SignUpForm({ next = "/app" }: { next?: string }) {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
     signupAction,
     null,
@@ -29,6 +34,7 @@ export function SignUpForm() {
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <ErrorNote error={state?.error} />
+      <NextField next={next} />
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Your name
         <input
@@ -74,7 +80,7 @@ export function SignUpForm() {
   );
 }
 
-export function SignInForm() {
+export function SignInForm({ next = "/app" }: { next?: string }) {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(
     signinAction,
     null,
@@ -82,6 +88,7 @@ export function SignInForm() {
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <ErrorNote error={state?.error} />
+      <NextField next={next} />
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Email
         <input

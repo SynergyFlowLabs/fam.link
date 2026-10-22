@@ -4,7 +4,8 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { memories, parentChild, persons, unions } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { ownedTree } from "@/actions/trees";
+import { getTreeAccess } from "@/lib/access";
+import { canComment, canEdit } from "@/lib/roles";
 import { displayName, lifeLine } from "@/lib/canvas-types";
 import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
 
@@ -16,8 +17,9 @@ export default async function PersonPage({
   const { id: treeId, personId } = await params;
   const user = await getCurrentUser();
   if (!user) notFound();
-  const tree = await ownedTree(treeId, user.id);
-  if (!tree) notFound();
+  const access = await getTreeAccess(treeId, user.id);
+  if (!access) notFound();
+  const role = access.role;
 
   const personRows = await db
     .select()
@@ -173,6 +175,8 @@ export default async function PersonPage({
           treeId={treeId}
           personId={personId}
           personName={name}
+          canAdd={canComment(role)}
+          canDeleteAny={canEdit(role)}
           initialMemories={memoryRows.map((m) => ({
             id: m.id,
             kind: m.kind,
@@ -180,6 +184,7 @@ export default async function PersonPage({
             occurredText: m.occurredText,
             authorName: m.authorName,
             mediaId: m.mediaId,
+            mine: m.authorUserId === user.id,
             createdAt: new Date(m.createdAt).toLocaleDateString("en", {
               day: "numeric",
               month: "short",
@@ -189,10 +194,13 @@ export default async function PersonPage({
         />
       </div>
 
+      {canEdit(role) && (
       <div className="mt-6">
         <AddRelativeCard treeId={treeId} personId={person.id} personName={name} />
       </div>
+      )}
 
+      {canEdit(role) && (
       <details className="mt-6 rounded-2xl border border-line bg-card p-5">
         <summary className="cursor-pointer font-display text-lg font-semibold text-ink">
           Edit details
@@ -208,6 +216,7 @@ export default async function PersonPage({
           </div>
         </div>
       </details>
+      )}
     </div>
   );
 }

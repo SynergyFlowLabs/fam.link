@@ -181,6 +181,8 @@ export interface MemoryItem {
   authorName: string | null;
   createdAt: string;
   mediaId: string | null;
+  /** Written by the signed-in member (they may remove their own). */
+  mine?: boolean;
 }
 
 export function MemorySection({
@@ -188,11 +190,17 @@ export function MemorySection({
   personId,
   personName,
   initialMemories,
+  canAdd = true,
+  canDeleteAny = true,
 }: {
   treeId: string;
   personId: string;
   personName: string;
   initialMemories: MemoryItem[];
+  /** Commenter and up may share memories here. */
+  canAdd?: boolean;
+  /** Editor and up may remove anyone's memory (authors can remove their own). */
+  canDeleteAny?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -211,6 +219,7 @@ export function MemorySection({
         born.
       </p>
 
+      {canAdd ? (
       <form
         action={(fd: FormData) => {
           startTransition(async () => {
@@ -280,6 +289,12 @@ export function MemorySection({
           {pending ? "Saving…" : "Add memory"}
         </button>
       </form>
+      ) : (
+        <p className="mt-4 rounded-lg border border-dashed border-line bg-paper px-4 py-3 text-xs leading-relaxed text-ink-soft">
+          You&apos;re viewing this tree — ask its owner to invite you as a
+          commenter to share memories here.
+        </p>
+      )}
 
       {initialMemories.length > 0 && (
         <ul className="mt-6 space-y-5">
@@ -305,6 +320,7 @@ export function MemorySection({
                   .filter(Boolean)
                   .join(" · ")}
               </p>
+              {(canDeleteAny || m.mine) && (
               <form
                 action={(fd: FormData) => {
                   startTransition(async () => {
@@ -329,6 +345,7 @@ export function MemorySection({
                   remove
                 </button>
               </form>
+              )}
             </li>
           ))}
         </ul>

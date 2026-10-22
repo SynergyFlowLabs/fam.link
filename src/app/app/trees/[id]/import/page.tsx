@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { pendingImports, persons } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { ownedTree } from "@/actions/trees";
+import { getTreeAccess } from "@/lib/access";
+import { canEdit } from "@/lib/roles";
 import type { ImportPlan } from "@/lib/gedcom/import";
 import { GedcomReviewActions, GedcomUploadForm } from "@/components/gedcom-import";
 
@@ -36,8 +37,8 @@ export default async function ImportPage({
   const { id: treeId } = await params;
   const user = await getCurrentUser();
   if (!user) notFound();
-  const tree = await ownedTree(treeId, user.id);
-  if (!tree) notFound();
+  const access = await getTreeAccess(treeId, user.id);
+  if (!access || !canEdit(access.role)) notFound();
 
   const pendingRows = await db
     .select()
@@ -78,7 +79,7 @@ export default async function ImportPage({
       ) : (
         <ReviewScreen
           treeId={treeId}
-          treeName={tree.name}
+          treeName={access.tree.name}
           importId={pending.id}
           fileName={pending.fileName}
           plan={JSON.parse(pending.planJson) as ImportPlan}

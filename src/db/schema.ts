@@ -187,7 +187,12 @@ export const memories = sqliteTable(
       .default("text"),
     body: text("body").notNull(), // the story text (or caption for photo/voice)
     occurredText: text("occurred_text"), // fuzzy "when was this?" e.g. "Eid 1994"
-    authorName: text("author_name"), // who remembers (may not have an account)
+    authorName: text("author_name"), // display name (may not have an account)
+    // The account that wrote it, if any. Commenters may delete their own
+    // memories even though they can't touch the rest of the tree.
+    authorUserId: text("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     mediaId: text("media_id").references(() => media.id, {
       onDelete: "set null",
     }),
@@ -249,6 +254,73 @@ export const pendingImports = sqliteTable(
 );
 
 
+/**
+ * Collaborators on a tree — the people the owner invited in.
+ *
+ * A member's `role` is one of viewer / commenter / editor (see src/lib/roles.ts
+ * for the one definition of what each role may do). The owner is NOT a row
+ * here: ownership lives on `trees.ownerId` and outranks every member role.
+ */
+export const treeMembers = sqliteTable(
+  "tree_members",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role", {
+      enum: ["viewer", "commenter", "editor"],
+    }).notNull(),
+    invitedBy: text("invited_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("tree_members_tree_user_idx").on(t.treeId, t.userId),
+    index("tree_members_user_idx").on(t.userId),
+  ],
+);
+
+/**
+ * Invite links — how family members join a tree with a role.
+ *
+ * Like share links: an unguessable token in the URL, revocable at any time.
+ * A link is multi-use until revoked (families forward one link to the whole
+ * group); whoever opens it while signed in joins as `role`. The owner curates
+ * afterwards (change role / remove) on the members page.
+ */
+export const treeInvites = sqliteTable(
+  "tree_invites",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    role: text("role", {
+      enum: ["viewer", "commenter", "editor"],
+    }).notNull(),
+    label: text("label"), // e.g. "Cousins WhatsApp group"
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [
+    index("tree_invites_tree_idx").on(t.treeId),
+  ],
+);
+
+
 export type User = typeof users.$inferSelect;
 export type Tree = typeof trees.$inferSelect;
 export type Person = typeof persons.$inferSelect;
@@ -257,3 +329,5 @@ export type ParentChild = typeof parentChild.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type Media = typeof media.$inferSelect;
 export type ShareLink = typeof shareLinks.$inferSelect;
+export type TreeMember = typeof treeMembers.$inferSelect;
+export type TreeInvite = typeof treeInvites.$inferSelect;

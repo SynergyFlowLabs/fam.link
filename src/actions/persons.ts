@@ -19,12 +19,33 @@ import {
 } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ownedTree } from "@/actions/trees";
+import { getTreeAccess } from "@/lib/access";
+import { canComment, canEdit, type Role } from "@/lib/roles";
 import { OK, fail, type ActionResult } from "@/lib/action-result";
 
 export type Relation = "father" | "mother" | "spouse" | "child";
 
 function displayName(fields: ReturnType<typeof personFields>): string {
   return [fields.firstName, fields.lastName].filter(Boolean).join(" ") || "Someone";
+}
+
+/**
+ * Role guards. Owner+editor may restructure the tree; commenter and up may
+ * add memories; viewing is checked at the page/route layer. Actions that
+ * answer with a toast (ActionResult) fail politely instead of redirecting.
+ */
+async function requireUser(): Promise<{ id: string } | null> {
+  const user = await getCurrentUser();
+  return user ? { id: user.id } : null;
+}
+
+async function accessFor(
+  treeId: string,
+): Promise<{ userId: string; role: Role } | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+  const access = await getTreeAccess(treeId, user.id);
+  return access ? { userId: user.id, role: access.role } : null;
 }
 
 function personFields(formData: FormData) {
@@ -51,12 +72,26 @@ function personFields(formData: FormData) {
   };
 }
 
-async function assertOwned(treeId: string) {
+/** Editor-and-up guard for redirecting (void) actions. Null → redirect /app. */
+async function assertEditable(treeId: string) {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
-  const tree = await ownedTree(treeId, user.id);
-  if (!tree) redirect("/app");
-  return tree;
+  const access = await getTreeAccess(treeId, user.id);
+  return access && canEdit(access.role) ? access.tree : null;
+}
+
+/** Editor-and-up guard for ActionResult actions (polite toast on denial). */
+async function assertEditorResult(
+  treeId: string,
+): Promise<ActionResult | null> {
+  const access = await accessFor(treeId);
+  if (!access) return fail("You don't have access to that tree.");
+  if (!canEdit(access.role)) {
+    return fail(
+      "Growing this tree needs the Editor role — ask its owner for access.",
+    );
+  }
+  return null;
 }
 
 async function touchTree(treeId: string) {
@@ -109,7 +144,10 @@ export async function addFirstPersonAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
-  const tree = await assertOwned(treeId);
+  const user = await requireUser();
+  if (!user) redirect("/signin");
+  const tree = await ownedTree(treeId, user.id);
+  if (!tree) return fail("You don't have access to that tree.");
   const fields = personFields(formData);
   const name = displayName(fields);
   const id = await insertPerson(treeId, fields);
@@ -128,7 +166,8 @@ export async function addRelativeAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
-  await assertOwned(treeId);
+  const denied = await assertEditorResult(treeId);
+  if (denied) return denied;
   const anchorId = String(formData.get("anchorId") ?? "");
   const relation = String(formData.get("relation") ?? "") as Relation;
   if (!anchorId || !["father", "mother", "spouse", "child"].includes(relation)) {
@@ -202,7 +241,8 @@ export async function updatePersonAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
-  await assertOwned(treeId);
+  const denied = await assertEditorResult(treeId);
+  if (denied) return denied;
   const personId = String(formData.get("personId") ?? "");
   if (!personId) return fail("That person is no longer in this tree.");
 
@@ -218,7 +258,8 @@ export async function updatePersonAction(
 
 export async function deletePersonAction(formData: FormData): Promise<void> {
   const treeId = String(formData.get("treeId") ?? "");
-  const tree = await assertOwned(treeId);
+  const tree = await assertEditable(treeId);
+  if (!tree) redirect("/app");
   const personId = String(formData.get("personId") ?? "");
   if (!personId) return;
 
@@ -260,7 +301,8 @@ export async function deletePersonAction(formData: FormData): Promise<void> {
 
 export async function setFocusPersonAction(formData: FormData): Promise<void> {
   const treeId = String(formData.get("treeId") ?? "");
-  await assertOwned(treeId);
+  const tree = await assertEditable(treeId);
+  if (!tree) redirect("/app");
   const personId = String(formData.get("personId") ?? "");
   if (!personId) return;
   await db
@@ -274,7 +316,13 @@ export async function addMemoryAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
-  await assertOwned(treeId);
+  const access = await accessFor(treeId);
+  if (!access) return fail("You don't have access to that tree.");
+  if (!canComment(access.role)) {
+    return fail(
+      "Sharing memories here needs the Commenter role — ask its owner for access.",
+    );
+  }
   const personId = String(formData.get("personId") ?? "");
   const body = String(formData.get("body") ?? "").trim();
 
@@ -308,7 +356,7 @@ export async function addMemoryAction(
       path: `uploads/${mediaId}.${ext}`,
       mimeType: photo.type,
       sizeBytes: photo.size,
-      uploadedBy: null,
+      uploadedBy: access.userId,
     });
     kind = "photo";
   }
@@ -325,6 +373,7 @@ export async function addMemoryAction(
     body,
     occurredText: occurred || null,
     authorName: author || null,
+    authorUserId: access.userId,
     mediaId,
   });
   await touchTree(treeId);
@@ -336,19 +385,28 @@ export async function deleteMemoryAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const treeId = String(formData.get("treeId") ?? "");
-  await assertOwned(treeId);
+  const access = await accessFor(treeId);
+  if (!access) return fail("You don't have access to that tree.");
   const memoryId = String(formData.get("memoryId") ?? "");
   const personId = String(formData.get("personId") ?? "");
   if (!memoryId) return fail("That memory is already gone.");
   // Ensure the memory belongs to a person in this tree
   const rows = await db
-    .select({ personId: memories.personId, treeId: persons.treeId })
+    .select({
+      personId: memories.personId,
+      treeId: persons.treeId,
+      authorUserId: memories.authorUserId,
+    })
     .from(memories)
     .innerJoin(persons, eq(memories.personId, persons.id))
     .where(eq(memories.id, memoryId))
     .limit(1);
   if (!rows[0] || rows[0].treeId !== treeId)
     return fail("That memory is no longer in this tree.");
+  const mine = rows[0].authorUserId === access.userId;
+  if (!canEdit(access.role) && !(canComment(access.role) && mine)) {
+    return fail("Only the owner, an editor, or the author can remove a memory.");
+  }
 
   await db.delete(memories).where(eq(memories.id, memoryId));
   await touchTree(treeId);

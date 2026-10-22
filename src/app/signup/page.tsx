@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { SignUpForm } from "@/components/auth-forms";
 import { Logo } from "@/components/logo";
+import { safeNextPath } from "@/lib/roles";
 
 export const metadata = { title: "Create your tree" };
 
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const next = safeNextPath((await searchParams).next);
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-8" aria-label="fam.link home">
@@ -18,7 +24,7 @@ export default function SignUpPage() {
           It starts with you — name, email, a password. That&apos;s the whole
           setup.
         </p>
-        <SignUpForm />
+        <SignUpForm next={next} />
       </div>
     </main>
   );
