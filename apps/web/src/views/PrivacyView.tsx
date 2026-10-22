@@ -18,7 +18,7 @@ const CONFIGURABLE_FIELDS: Array<{ field: string; label: string; who: string }> 
   { field: 'deathDate', label: 'Date of death', who: 'Family record' },
 ];
 
-const SCOPES = [
+const SCOPES: Array<{ id: string; label: string }> = [
   { id: 'private', label: 'Only me' },
   { id: 'selected', label: 'Selected relatives' },
   { id: 'immediate-family', label: 'Immediate family' },
@@ -51,6 +51,7 @@ export function PrivacyView({
     if (!person) return;
     try {
       await api.setVisibility(spaceId, person.id, field, scope);
+      profile.reload();
       setMessage({ tone: 'ok', text: `${field} is now visible to: ${SCOPES.find((s) => s.id === scope)?.label ?? scope}.` });
     } catch (error) {
       setMessage({ tone: 'danger', text: error instanceof Error ? error.message : 'Could not change that setting.' });
@@ -90,7 +91,8 @@ export function PrivacyView({
                 </div>
                 <select
                   aria-label={`Visibility for ${entry.label}`}
-                  defaultValue={person.hiddenFields.includes(entry.field) ? 'immediate-family' : 'family-space'}
+                  value={person.visibility?.[entry.field] ?? 'family-space'}
+                  disabled={person.canEditVisibility === false}
                   onChange={(event) => void setScope(entry.field, event.target.value)}
                 >
                   {SCOPES.map((scope) => (

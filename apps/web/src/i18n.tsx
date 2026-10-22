@@ -100,6 +100,9 @@ const LocaleContext = createContext<LocaleContextValue>({
 
 const STORAGE_KEY = 'famlink.locale';
 
+/** Exposed for tests: both dictionaries must cover the same keys, and Urdu must be non-empty. */
+export const dictionaries: Record<Locale, Dictionary> = { en, ur };
+
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);

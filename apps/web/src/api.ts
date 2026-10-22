@@ -25,6 +25,9 @@ export interface PersonView {
   claimed: boolean;
   hiddenFields: string[];
   relationshipToViewer?: string;
+  /** Effective scope per configurable field — present only for viewers allowed to change it. */
+  visibility?: Record<string, string>;
+  canEditVisibility?: boolean;
 }
 
 export interface TreeResponse {

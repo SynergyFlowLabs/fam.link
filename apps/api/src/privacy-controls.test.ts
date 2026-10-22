@@ -49,6 +49,28 @@ describe('field-level visibility controls', () => {
     expect(profile.body.person.hiddenFields).toContain('birthPlace');
   });
 
+  it('reads the stored scope back to the owner and to nobody else', async () => {
+    const app = createApp();
+    const before = await request(app, 'GET', `${SPACE}/people/person-bilal`, { userId: 'user-bilal' });
+    // The default for a living person's birth date is immediate family; the owner must see that.
+    expect(before.body.person.visibility.birthDate).toBe('immediate-family');
+    expect(before.body.person.canEditVisibility).toBe(true);
+
+    const changed = await request(app, 'PATCH', `${SPACE}/people/person-bilal/visibility`, {
+      userId: 'user-bilal',
+      body: { field: 'birthDate', scope: 'private' },
+    });
+    expect(changed.status).toBe(200);
+
+    const after = await request(app, 'GET', `${SPACE}/people/person-bilal`, { userId: 'user-bilal' });
+    expect(after.body.person.visibility.birthDate).toBe('private');
+
+    // A relative sees the effect but never the configuration.
+    const relative = await request(app, 'GET', `${SPACE}/people/person-bilal`, { userId: 'user-sadia' });
+    expect(relative.body.person.visibility).toBeUndefined();
+    expect(relative.body.person.canEditVisibility).toBeUndefined();
+  });
+
   it('refuses to let an administrator change a living person’s visibility', async () => {
     const response = await request(createApp(), 'PATCH', `${SPACE}/people/person-bilal/visibility`, {
       userId: 'user-ayesha',

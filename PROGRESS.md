@@ -189,6 +189,25 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 9 — Visibility readback and a localisation guard ✅
+
+**Shipped**
+- `projectPerson` now returns the **effective** scope of every configurable field (`visibility`) plus
+  `canEditVisibility`, but only to the owner or the custodian of an unclaimed profile. Other
+  relatives still receive `hiddenFields` and nothing else, so configuration is not leaked as a side
+  effect of the projection.
+- Privacy screen uses those values as the real state of its selectors instead of inferring a scope
+  from whether a field happened to be hidden, and reloads after each change so the control cannot
+  drift from the server. F-6.2 closed.
+- `apps/web/src/i18n.test.ts` — dictionary parity (en ↔ ur), no empty Urdu strings, no English
+  copied through, no raw keys rendered as copy. Localisation drift is now a test failure.
+
+**Verification:** **120 tests passing** (75 domain + 41 API + 4 i18n), typecheck clean, web build
+296 kB (89 kB gzip). Confirmed against the running API that Bilal reads back
+`birthDate: immediate-family` while Sadia receives no `visibility` object.
+
+---
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.
@@ -197,7 +216,7 @@ Ordered by the MVP's actual question — *will relatives collaborate?* — not b
 |---|---|---|---|
 | 1 | Real authentication (email magic link + phone OTP) and rate limiting | F-1.1 | The demo persona switcher is the single largest gap between this and a beta |
 | 2 | Invitation delivery (email + WhatsApp send) with bounce/opt-out handling | F-4.2 | Links are generated but never sent, so the loop cannot be measured in the wild |
-| 3 | Read back your own visibility configuration | F-6.2 | The UI currently derives the current scope from `hiddenFields`; the API should return your own overrides |
+| 3 | ~~Read back your own visibility configuration~~ | F-6.2 | ✅ Step 9 |
 | 4 | Merge reversal from the merge log | F-8.3 | Merges are implemented and conflict-aware but not yet undoable |
 | 5 | Notification preferences and a real outbox for delivery | F-9.3 | Derived feed works in-product; delivery needs an idempotent outbox (ADR 0004) |
 | 6 | Full localisation of screen bodies, dialogs, invite copy | F-9.2 | Shell and tree are done; the rest is English |

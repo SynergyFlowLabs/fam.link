@@ -61,6 +61,13 @@ export interface PersonView {
   readonly hiddenFields: readonly string[];
   /** Relationship label of this person to the viewer, when the viewer has a person record. */
   readonly relationshipToViewer?: string;
+  /**
+   * The effective scope of each configurable field, returned only to the people allowed to change
+   * it (owner, or custodian of an unclaimed profile). Every other viewer sees `hiddenFields` only.
+   */
+  readonly visibility?: Readonly<Record<string, VisibilityScope>>;
+  /** True when this viewer may change the scopes above. Prevents a UI that offers a control which 403s. */
+  readonly canEditVisibility?: boolean;
 }
 
 export function defaultFieldScope(person: Person, field: string): VisibilityScope {
@@ -260,6 +267,19 @@ export function projectPerson(
   if (allowed('biography')) assign('biography', person.biography);
   if (allowed('photoUrl')) assign('photoUrl', person.photoUrl);
   if (allowed('placesLived')) assign('placesLived', person.placesLived);
+
+  // Visibility readback: the owner (or the custodian of an unclaimed profile) needs to see the
+  // stored override, not a value the client infers from `hiddenFields`.
+  const isSubject = viewer.viewerPersonId === person.id;
+  const isCustodianOfUnclaimed = person.custodianUserId === viewer.userId && !person.claimedByUserId;
+  if (isSubject || isCustodianOfUnclaimed) {
+    const visibility: Record<string, VisibilityScope> = {};
+    for (const entry of CONFIGURABLE_FIELDS) {
+      visibility[entry.field] = fieldScope(person, entry.field);
+    }
+    assign('visibility', visibility);
+    assign('canEditVisibility', true);
+  }
 
   return view;
 }
