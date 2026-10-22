@@ -114,7 +114,7 @@ No real family data belongs in this repository.
 ```bash
 npm install
 npm run dev        # API on :8787, web on :5173 (proxies /api)
-npm test           # 115 tests
+npm test           # 130 tests
 npm run typecheck
 npm run build      # typecheck + production build of the web client
 ```
@@ -160,6 +160,10 @@ path, common ancestor and Urdu kinship terms; explainable duplicate detection wi
 values retained with both claims; precise revert; derived notification feed; field-level privacy
 authoring; hidden branches; minors, blocked users, separation, abuse reporting, scoped export and
 account deletion; guided onboarding; English/Urdu shell with RTL.
+
+Duplicates are reviewed with an explanation of *why* each pair was suggested, merges can be undone,
+and the People screen includes a tree-health report of the things that actually make a tree
+unreliable (dates that cannot be true, records with no links, disputed values).
 
 **Deliberately not built yet** (see `PROGRESS.md` §8): real authentication and message delivery,
 memories and voice recordings (Phase 2), notification preferences, full localisation of every

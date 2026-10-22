@@ -13,3 +13,4 @@ export * from './authority.js';
 export * from './duplicates.js';
 export * from './proposals.js';
 export * from './search.js';
+export * from './health.js';

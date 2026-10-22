@@ -214,13 +214,21 @@ const PATH_TIERS: ReadonlyArray<{ basis: Basis; kinds: readonly RelationshipKind
  * adoptive path: a two-step adopted sibling must not lose to a six-step blood cousin, while a
  * four-step blood cousin beats a four-step adoptive one.
  */
+/**
+ * How much a path costs, in "steps", for choosing the relationship to report.
+ *
+ * Blood is cheapest, but not infinitely so: a two-step adoptive relationship is a closer fact than a
+ * six-step blood one, and a four-step "my husband's brother's son" is more useful than a five-step
+ * "my daughter's father's brother's son". Keeping the penalty below one step means a relation by
+ * marriage or adoption beats a blood path that is only a step longer, which is how families talk.
+ */
 const BASIS_PENALTY: Readonly<Record<Basis, number>> = {
   blood: 0,
-  adoptive: 1,
-  foster: 1.5,
-  guardian: 2,
-  step: 2.5,
-  marriage: 2.5,
+  adoptive: 0.75,
+  foster: 1,
+  guardian: 1.25,
+  step: 1,
+  marriage: 0.75,
 };
 
 export function pathScore(path: PathCandidate): number {
@@ -277,6 +285,9 @@ function classifyBasis(steps: readonly KinshipStep[]): Basis {
   );
 
   if (partnerIndexes.length === 0) return bloodBasis;
+
+  // A path that passes through a marriage is not a blood relationship, even when the rest of it is:
+  // "my daughter's father's brother's son" is a relation by marriage, not a cousin.
 
   // A partner step directly after a parent step is a step-parent; after that, a step sibling.
   const isStep = partnerIndexes.some((index) => steps[index - 1]?.direction === 'parent');
@@ -531,11 +542,19 @@ export function classifyPath(
     };
   }
 
+  // child → parent → child: a child's other parent's child, i.e. a step-sibling.
+  if (directions.length === 3 && directions[0] === 'child' && directions[1] === 'parent' && directions[2] === 'child') {
+    return {
+      termId: 'step-sibling',
+      term: gendered(genderOf(index, targetId), { female: 'step-sister', male: 'step-brother', neutral: 'step-sibling' }),
+    };
+  }
+
   // parent → partner → child: step-sibling.
   if (directions.length === 3 && directions[0] === 'parent' && directions[1] === 'partner' && directions[2] === 'child') {
     return {
       termId: 'step-sibling',
-      term: gendered(genderOf(index, targetId), { female: 'stepsister', male: 'stepbrother', neutral: 'step-sibling' }),
+      term: gendered(genderOf(index, targetId), { female: 'step-sister', male: 'step-brother', neutral: 'step-sibling' }),
     };
   }
 
@@ -559,22 +578,78 @@ export function classifyPath(
     };
   }
 
-  // sibling → partner, or partner → sibling: sibling-in-law.
+  /**
+   * One marriage edge attached to an otherwise lineal path: "my aunt's husband", "my brother's
+   * wife", "my wife's father". The blood shape of the rest of the path decides the term, because
+   * that is what a family actually says out loud.
+   */
   const lastPartner = directions[directions.length - 1] === 'partner';
   const firstPartner = directions[0] === 'partner';
-  if ((lastPartner || firstPartner) && directions.filter((direction) => direction === 'partner').length === 1) {
-    const rest = lastPartner ? directions.slice(0, -1) : directions.slice(1);
-    const restUp = rest.filter((direction) => direction === 'parent').length;
-    const restDown = rest.filter((direction) => direction === 'child').length;
-    if (restUp === 1 && restDown === 1) {
-      return {
-        termId: 'sibling-in-law',
-        term: gendered(genderOf(index, targetId), {
-          female: 'sister-in-law',
-          male: 'brother-in-law',
-          neutral: 'sibling-in-law',
-        }),
-      };
+  const partnerCount = directions.filter((direction) => direction === 'partner').length;
+  if ((lastPartner || firstPartner) && partnerCount === 1) {
+    const rest = lastPartner ? steps.slice(0, -1) : steps.slice(1);
+    const restCounts = linealCounts(rest);
+    if (restCounts) {
+      const { up, down } = restCounts;
+      if (up === 1 && down === 1) {
+        return {
+          termId: 'sibling-in-law',
+          term: gendered(genderOf(index, targetId), {
+            female: 'sister-in-law',
+            male: 'brother-in-law',
+            neutral: 'sibling-in-law',
+          }),
+        };
+      }
+      if (up === 2 && down === 1) {
+        return {
+          termId: 'aunt-uncle',
+          term: `${gendered(genderOf(index, targetId), {
+            female: 'aunt',
+            male: 'uncle',
+            neutral: 'aunt or uncle',
+          })} (by marriage)`,
+        };
+      }
+      if (up === 1 && down === 2) {
+        return {
+          termId: 'niece-nephew',
+          term: `${gendered(genderOf(index, targetId), {
+            female: 'niece',
+            male: 'nephew',
+            neutral: 'niece or nephew',
+          })} (by marriage)`,
+        };
+      }
+      if (up >= 2 && down >= 2) {
+        return { termId: 'cousin', term: `${linealTerm(index, restCounts, targetId).term} (by marriage)` };
+      }
+      if (up === 1 && down === 0) {
+        // A partner of my parent, or the parent of my partner: two different roles.
+        return lastPartner
+          ? {
+              termId: 'step-parent',
+              term: gendered(genderOf(index, targetId), { female: 'stepmother', male: 'stepfather', neutral: 'step-parent' }),
+            }
+          : {
+              termId: 'parent-in-law',
+              term: gendered(genderOf(index, targetId), {
+                female: 'mother-in-law',
+                male: 'father-in-law',
+                neutral: 'parent-in-law',
+              }),
+            };
+      }
+      if (up === 0 && down >= 1) {
+        return {
+          termId: 'child-in-law',
+          term: gendered(genderOf(index, targetId), {
+            female: 'daughter-in-law',
+            male: 'son-in-law',
+            neutral: 'child-in-law',
+          }),
+        };
+      }
     }
     return { termId: 'in-law', term: 'in-law' };
   }
@@ -694,12 +769,18 @@ export function calculateRelationship(
       generationsDown: down,
     }));
 
-  const ranked = [...candidates].sort((left, right) =>
-    compareCandidates(
+  // When two paths cost the same, prefer the one that produces a term the family has a word for.
+  // "Your nephew" is a better answer than "your son's brother" even if both are three steps.
+  const ranked = [...candidates].sort((left, right) => {
+    const byCost = compareCandidates(
       { steps: left.path, basis: left.basis },
       { steps: right.path, basis: right.basis },
-    ),
-  );
+    );
+    if (byCost !== 0) return byCost;
+    const leftKnown = left.termId === 'unknown' ? 1 : 0;
+    const rightKnown = right.termId === 'unknown' ? 1 : 0;
+    return leftKnown - rightKnown;
+  });
 
   const primary = ranked[0]!;
   const alternatives = ranked

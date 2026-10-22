@@ -144,6 +144,28 @@ describe('relationship calculator', () => {
     expect(kinshipTermIn(index, result, 'ur')).toBe('بہن');
   });
 
+  it('names in-laws by marriage rather than by the longer blood route', () => {
+    // Ayesha is Bilal's father's brother's wife. The graph also contains a longer path through her
+    // daughter; the shorter, marriage-based answer is the one a person would say.
+    const aunt = calculateRelationship(index, 'bilal', 'ayesha');
+    expect(aunt.termId).toBe('aunt-uncle');
+    expect(aunt.term).toBe('aunt (by marriage)');
+    expect(aunt.description).toBe("your father's brother's wife");
+    expect(aunt.basis).toBe('marriage');
+
+    const nephew = calculateRelationship(index, 'ayesha', 'bilal');
+    expect(nephew.termId).toBe('niece-nephew');
+    expect(nephew.term).toBe('nephew (by marriage)');
+  });
+
+  it('reports a spouse directly, without routing through shared children', () => {
+    const result = calculateRelationship(index, 'ahmed', 'farah');
+    expect(result.termId).toBe('spouse');
+    expect(result.description).toBe('your wife');
+    // Both are parents of Humza, so a blood-only search would have answered "co-parent".
+    expect(result.basis).toBe('marriage');
+  });
+
   it('never returns an English-only term when a locale term is unavailable', () => {
     const result = calculateRelationship(index, 'bilal', 'sara');
     expect(kinshipTermIn(index, result, 'en')).toBeUndefined();

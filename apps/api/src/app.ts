@@ -28,6 +28,7 @@ import {
   planRevert,
   canSeePerson,
   calculateRelationship,
+  treeHealth,
   descendantIds,
   directRelatives,
   directory,
@@ -1511,6 +1512,54 @@ export function createApp(): express.Express {
           survivorName: store.persons.find((person) => person.id === merge.survivorId)?.givenName,
           absorbedName: store.persons.find((person) => person.id === merge.absorbedId)?.givenName,
         })),
+    });
+  });
+
+  // ---------------------------------------------------------------- tree health
+
+  /**
+   * What is wrong with the tree, in the viewer's terms.
+   *
+   * Findings are filtered to what this viewer can already see, so the list cannot be used to infer
+   * the existence of a person hidden from them. Duplicate and dispute counts come from the same
+   * checks used elsewhere rather than a second implementation.
+   */
+  app.get('/api/spaces/:spaceId/health', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, viewer } = ctx as Required<Context>;
+    const graph = spaceGraph(store, spaceId);
+    const index = indexGraph(graph);
+    const allow = visibilityGate(index, viewer);
+
+    const duplicatePersonIds: string[] = [];
+    for (const person of index.persons.values()) {
+      if (!allow(person.id)) continue;
+      const candidates = findDuplicatesFor(graph, person.id, { allow, threshold: 0.35 });
+      if (candidates.length > 0) duplicatePersonIds.push(person.id);
+    }
+
+    const health = treeHealth(graph, {
+      allow,
+      openDisputePersonIds: store.proposals
+        .filter((proposal) => proposal.spaceId === spaceId && proposal.status === 'proposed' || proposal.status === 'disputed')
+        .map((proposal) => proposal.personId),
+      duplicatePersonIds,
+    });
+
+    response.json({
+      ...health,
+      findings: health.findings.map((finding) => ({
+        ...finding,
+        people: finding.personIds
+          .map((id) => index.persons.get(id))
+          .filter((person): person is NonNullable<typeof person> => Boolean(person))
+          .map((person) => ({ id: person.id, name: displayName(person) })),
+      })),
     });
   });
 

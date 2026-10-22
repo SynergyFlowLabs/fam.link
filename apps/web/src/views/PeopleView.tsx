@@ -23,6 +23,7 @@ export function PeopleView({ spaceId, onSelect, onFocus, canManage }: PeopleView
 
   const people = useAsync(() => api.people(spaceId, debounced), [spaceId, debounced]);
   const duplicates = useAsync(() => api.duplicates(spaceId), [spaceId]);
+  const health = useAsync(() => api.health(spaceId), [spaceId]);
   const merges = useAsync(() => (canManage ? api.merges(spaceId) : Promise.resolve({ merges: [] })), [spaceId, canManage]);
 
   const mergeHistory = merges.data?.merges ?? [];
@@ -92,6 +93,30 @@ export function PeopleView({ spaceId, onSelect, onFocus, canManage }: PeopleView
           ) : null}
         </>
       )}
+
+      {health.data && health.data.findings.length > 0 ? (
+        <section className="card">
+          <div className="section-title">
+            <h3 style={{ fontSize: 'var(--step-1)' }}>Tree health</h3>
+            <span className="hint">
+              {health.data.linkedToSomeone} of {health.data.peopleCount} people are connected
+            </span>
+          </div>
+          <div className="list">
+            {health.data.findings.map((finding) => (
+              <div className="row" key={finding.id} style={{ alignItems: 'flex-start' }}>
+                <div className="row__main">
+                  <div className="row__subject">
+                    {finding.title} <Chip tone={finding.severity === 'blocking' ? 'lac' : 'muted'}>{finding.people.length}</Chip>
+                  </div>
+                  <div className="row__sub">{finding.detail}</div>
+                  <div className="hint">{finding.people.map((person) => person.name).join(' · ')}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div>
         <div className="section-title">

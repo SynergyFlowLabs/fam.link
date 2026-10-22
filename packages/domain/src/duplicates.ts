@@ -79,7 +79,21 @@ export function scorePair(index: GraphIndex, left: Person, right: Person): Dupli
     signals.push({ id: 'shared-child', weight: SIGNAL_WEIGHTS['shared-child'], detail: 'same child' });
   }
 
+  // Two people who are already directly related are not the same person, however similar their
+  // names are: a spouse or a child in the same branch is a relative, not a duplicate record.
+  const partnerIds = partnerIdsOf(index, left.id);
+  if (partnerIds.includes(right.id)) return null;
+  if (parentIdsOf(index, right.id).includes(left.id) || parentIdsOf(index, left.id).includes(right.id)) return null;
+
+  // A duplicate was born once. If both birth years are known and years apart, this is not a match.
+  const leftYear = yearOf(left.birthDate);
+  const rightYear = yearOf(right.birthDate);
+  if (leftYear !== undefined && rightYear !== undefined && Math.abs(leftYear - rightYear) > 2) return null;
+
   const similarity = nameSimilarityBetweenPeople(left, right);
+  // A record entered twice always shares a name. Relationship overlap without a name match is what
+  // a real family looks like, so it must not fill the review queue.
+  if (similarity < 0.55) return null;
   const identical =
     normaliseName(left.givenName) === normaliseName(right.givenName) &&
     normaliseName(left.familyName ?? '') === normaliseName(right.familyName ?? '');

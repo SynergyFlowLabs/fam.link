@@ -245,6 +245,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ outcome }),
     }),
+  health: (spaceId: string) =>
+    call<{
+      findings: Array<{
+        id: string;
+        title: string;
+        detail: string;
+        severity: 'blocking' | 'warning' | 'info';
+        people: Array<{ id: string; name: string }>;
+      }>;
+      peopleCount: number;
+      withBirthDate: number;
+      linkedToSomeone: number;
+    }>(`/api/spaces/${spaceId}/health`),
   duplicates: (spaceId: string) => call<{ candidates: DuplicateCandidate[] }>(`/api/spaces/${spaceId}/duplicates`),
   merge: (spaceId: string, survivorId: string, absorbedId: string) =>
     call<{ survivor: PersonView }>(`/api/spaces/${spaceId}/duplicates/merge`, {

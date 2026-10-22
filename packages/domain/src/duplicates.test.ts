@@ -62,9 +62,9 @@ describe('duplicate prevention', () => {
     const graph = withDuplicate();
     const candidates = findDuplicatesFor(graph, 'bilal-khan', { threshold: 0.2 });
     expect(candidates.map((candidate) => candidate.candidateId)).toContain('bilal-duplicate');
-    // A half-brother may also surface: shared-parent is a real signal, so the review queue must
-    // show both and let a human decide rather than guessing.
-    expect(candidates.some((candidate) => candidate.signals.some((signal) => signal.id === 'shared-parent'))).toBe(true);
+    // Relationship overlap counts only when the names agree. A half-brother with a different name is
+    // a relative, not a duplicate, and must not fill the review queue.
+    expect(candidates.every((candidate) => candidate.signals.some((signal) => signal.id.startsWith('name')))).toBe(true);
   });
 
   it('detects a duplicate before it is created', () => {

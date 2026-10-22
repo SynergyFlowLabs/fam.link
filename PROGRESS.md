@@ -232,6 +232,45 @@ so a mistaken merge meant rebuilding a person by hand.
 
 ---
 
+### Step 11 — Tree health, and a duplicate queue that is worth opening ✅
+
+**Shipped**
+- `packages/domain/src/health.ts` — `treeHealth()` reports checkable problems rather than a vague
+  completeness score: impossible date ranges (death before birth), a parent under 12 at a child's
+  birth, living people over 110, records with no links, remembered people without a death date,
+  open disputes, and possible duplicates. Every finding names people by id and carries a severity,
+  so "no birth date yet" (info) is never presented as equivalent to "born before your mother"
+  (blocking).
+- `GET /spaces/:id/health` filters findings through the viewer's visibility gate, so the list cannot
+  be used to infer that a hidden person exists. Dispute and duplicate inputs come from the same
+  checks used elsewhere, not a second implementation.
+- People screen: a **Tree health** card listing findings with names, plus a note of how many people
+  are connected.
+- Duplicate detection was producing twelve candidates in a thirteen-person demo family, which made
+  the review queue useless. The rules are now: a record entered twice always shares a *name*
+  (similarity ≥ 0.55), two people already directly related are not duplicates, and known birth years
+  more than two apart rule a match out. The demo family gained one deliberately planted duplicate so
+  the queue has one honest example instead of noise.
+- Relationship ranking was reporting "your daughter's father's brother's son" for a woman's nephew.
+  Paths are now scored as length plus a basis penalty, with marriage and adoption penalties below one
+  step: a four-step "your husband's brother's son" beats a five-step blood route, an adoptive parent
+  is a parent rather than a distant cousin, and in-laws get their own terms. See Step 12.
+
+**Verification:** **123 tests** at this point (5 new health tests), typecheck clean, web build 297 kB.
+
+### Step 12 — Relationship terms families actually use ✅
+
+**Shipped**
+- Path scoring (`BASIS_PENALTY`) with blood/adoptive/foster/guardian/step/marriage weights.
+- In-law classification by the blood shape of the remaining path: father's brother's wife → aunt
+  (by marriage), husband's brother's son → nephew (by marriage), daughter's husband → son-in-law.
+- Step-sibling detection for "a child's other parent's child" and for parent → partner → child.
+- Tie-break: when two paths cost the same, prefer the one that has a term the family has a word for.
+- `describePath` now compresses "father's father's son" into "father's brother" — the readable form.
+- Five new tests covering in-law preference, direct spouse reporting, and the compression.
+
+**Verification:** **130 tests passing**, typecheck clean.
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.
@@ -246,7 +285,7 @@ Ordered by the MVP's actual question — *will relatives collaborate?* — not b
 | 6 | Full localisation of screen bodies, dialogs, invite copy | F-9.2 | Shell and tree are done; the rest is English |
 | 7 | Per-node branch collapse and keyboard-first tree navigation | F-3.3, F-3.4 | Depth controls exist; the chart is not yet fully keyboard-operable |
 | 8 | Cross-space person linking and a space switcher | post-MVP (D-2) | Needed once a user belongs to paternal, maternal and in-law spaces |
-| 9 | Tree health summary (missing dates, detached branches, open disputes) | F-9.5 | Cheap, and it gives families a reason to return |
+| 9 | ~~Tree health summary (missing dates, detached branches, open disputes)~~ | F-9.5 | ✅ Step 11 |
 | 10 | Phase 2: memories, photographs beyond one per person, voice recordings, timeline | E9 | Only after the loop is proven |
 
 **Not to do before the loop is proven:** DNA integrations, record search, AI biographies, native

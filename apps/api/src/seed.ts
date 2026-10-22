@@ -55,6 +55,9 @@ const SEED_PEOPLE: SeedPerson[] = [
   { key: 'zoya', name: 'Zoya', family: 'Khan', gender: 'female', birth: '2012', place: 'Lahore', minor: true },
   { key: 'hamza', name: 'Hamza', family: 'Khan', gender: 'male', birth: '2015', place: 'Lahore', minor: true },
   { key: 'omar', name: 'Omar', family: 'Raza', gender: 'male', birth: '2018', place: 'Islamabad', minor: true },
+  // A deliberately planted duplicate: the same child entered twice by a relative who did not search
+  // first. It exists so the duplicate review queue has one honest example to demonstrate.
+  { key: 'omar-dup', name: 'Omar', family: 'Raza', gender: 'male', birth: '2018', place: 'Islamabad', minor: true },
   { key: 'ruqayya', name: 'Ruqayya', gender: 'female', living: 'deceased', birth: '1935', death: '2005', place: 'Multan' },
   { key: 'imran', name: 'Imran', family: 'Khan', gender: 'male', birth: '1962', place: 'Multan', alt: ['Chacha Imran'] },
   { key: 'sadia', name: 'Sadia', family: 'Khan', gender: 'female', birth: '1992', place: 'Multan', claimed: true },
@@ -88,10 +91,12 @@ const SEED_RELATIONSHIPS: Array<[string, string, RelationshipKind]> = [
   ['bilal', 'zoya', 'adoptive-parent'],
   ['hina', 'zoya', 'adoptive-parent'],
   ['hina', 'omar', 'biological-parent'],
+  ['bilal', 'omar', 'biological-parent'],
+  ['hina', 'omar-dup', 'biological-parent'],
+  ['bilal', 'omar-dup', 'biological-parent'],
   ['sara', 'usman', 'spouse'],
   ['sara', 'noor', 'biological-parent'],
   ['usman', 'noor', 'biological-parent'],
-  ['sadia', 'usman', 'spouse'],
   ['imran', 'sadia', 'biological-parent'],
   ['ruqayya', 'sadia', 'biological-parent'],
 ];
