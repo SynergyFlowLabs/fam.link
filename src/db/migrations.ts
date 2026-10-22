@@ -38,4 +38,11 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
         "CREATE INDEX IF NOT EXISTS `share_links_tree_idx` ON `share_links` (`tree_id`);",
     ],
   },
+  {
+    name: "0002_gedcom_import",
+    statements: [
+        "CREATE TABLE IF NOT EXISTS `pending_imports` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`uploaded_by` text,\n\t`file_name` text NOT NULL,\n\t`plan_json` text NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`uploaded_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+        "CREATE INDEX IF NOT EXISTS `pending_imports_tree_idx` ON `pending_imports` (`tree_id`);",
+    ],
+  },
 ];

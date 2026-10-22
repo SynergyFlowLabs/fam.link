@@ -96,6 +96,7 @@ export default async function TreeCanvasPage({
       links={canvasLinks}
       focusPersonId={tree.focusPersonId ?? canvasPersons[0].id}
       headerExtra={<ShareMenu treeId={treeId} links={shareLinkViews} />}
+      importHref={`/app/trees/${treeId}/import`}
     />
   );
 }
