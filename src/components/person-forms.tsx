@@ -9,8 +9,6 @@ import {
 } from "@/actions/persons";
 import type { Person } from "@/db/schema";
 
-const inputClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-soft/50 focus:border-evergreen focus:outline-none";
 const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink-soft";
 
 export function EditPersonForm({
@@ -37,21 +35,21 @@ export function EditPersonForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={labelClass}>
           First / given name
-          <input name="firstName" type="text" defaultValue={person.firstName ?? ""} className={inputClass} />
+          <input name="firstName" type="text" defaultValue={person.firstName ?? ""} className="input" />
         </label>
         <label className={labelClass}>
           Family name
-          <input name="lastName" type="text" defaultValue={person.lastName ?? ""} className={inputClass} />
+          <input name="lastName" type="text" defaultValue={person.lastName ?? ""} className="input" />
         </label>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={labelClass}>
           Known as
-          <input name="alsoKnownAs" type="text" defaultValue={person.alsoKnownAs ?? ""} className={inputClass} />
+          <input name="alsoKnownAs" type="text" defaultValue={person.alsoKnownAs ?? ""} className="input" />
         </label>
         <label className={labelClass}>
           Gender
-          <select name="gender" defaultValue={person.gender ?? ""} className={inputClass}>
+          <select name="gender" defaultValue={person.gender ?? ""} className="input">
             <option value="">Leave unsaid</option>
             <option value="f">Female</option>
             <option value="m">Male</option>
@@ -62,11 +60,11 @@ export function EditPersonForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={labelClass}>
           Born (fuzzy welcome)
-          <input name="birthDateText" type="text" defaultValue={person.birthDateText ?? ""} className={inputClass} />
+          <input name="birthDateText" type="text" defaultValue={person.birthDateText ?? ""} className="input" />
         </label>
         <label className={labelClass}>
           Birthplace
-          <input name="birthPlace" type="text" defaultValue={person.birthPlace ?? ""} className={inputClass} />
+          <input name="birthPlace" type="text" defaultValue={person.birthPlace ?? ""} className="input" />
         </label>
       </div>
       <label className="flex items-center gap-2 text-sm">
@@ -83,23 +81,23 @@ export function EditPersonForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className={labelClass}>
             Died (fuzzy welcome)
-            <input name="deathDateText" type="text" defaultValue={person.deathDateText ?? ""} className={inputClass} />
+            <input name="deathDateText" type="text" defaultValue={person.deathDateText ?? ""} className="input" />
           </label>
           <label className={labelClass}>
             Resting place
-            <input name="deathPlace" type="text" defaultValue={person.deathPlace ?? ""} className={inputClass} />
+            <input name="deathPlace" type="text" defaultValue={person.deathPlace ?? ""} className="input" />
           </label>
         </div>
       )}
       <label className={labelClass}>
         Notes
-        <textarea name="notes" rows={3} defaultValue={person.notes ?? ""} className={inputClass} />
+        <textarea name="notes" rows={3} defaultValue={person.notes ?? ""} className="input" />
       </label>
       <div className="flex items-center justify-between">
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-evergreen px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-evergreen-deep disabled:opacity-60"
+          className="btn-primary text-sm"
         >
           {pending ? "Saving…" : "Save changes"}
         </button>
@@ -168,7 +166,7 @@ export function MemorySection({
           name="body"
           rows={3}
           placeholder={`What do you remember about ${personName}?`}
-          className={inputClass}
+          className="input"
         />
         <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-line bg-paper px-3 py-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">
           <span aria-hidden>🖼️</span>
@@ -188,13 +186,13 @@ export function MemorySection({
             name="occurredText"
             type="text"
             placeholder="When? (Eid 1994)"
-            className={inputClass}
+            className="input"
           />
           <input
             name="authorName"
             type="text"
             placeholder="Who remembers? (optional)"
-            className={inputClass}
+            className="input"
           />
         </div>
         <button

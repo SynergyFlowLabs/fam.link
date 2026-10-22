@@ -174,6 +174,11 @@ export function TreeCanvas({
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
+      {readOnly && shareNote && (
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 bg-evergreen-deep px-4 py-1.5 text-center text-[11px] text-paper/85">
+          <span>{shareNote}</span>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-paper px-4 py-2.5">
         <div className="min-w-0">
           <h1 className="truncate font-display text-xl font-semibold text-ink">
@@ -221,29 +226,31 @@ export function TreeCanvas({
             </div>
           </details>
           )}
-          <button
-            type="button"
-            onClick={() => zoom(1 / 1.25)}
-            aria-label="Zoom in"
-            className="h-8 w-8 rounded-lg border border-line text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            onClick={() => zoom(1.25)}
-            aria-label="Zoom out"
-            className="h-8 w-8 rounded-lg border border-line text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={fit}
-            className="h-8 rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
-          >
-            Fit
-          </button>
+          <div className="flex items-center overflow-hidden rounded-full border border-line bg-card">
+            <button
+              type="button"
+              onClick={() => zoom(1.25)}
+              aria-label="Zoom out"
+              className="h-8 w-9 text-sm text-ink-soft transition-colors hover:bg-evergreen-mist hover:text-evergreen"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={fit}
+              className="h-8 border-x border-line px-3 text-xs text-ink-soft transition-colors hover:bg-evergreen-mist hover:text-evergreen"
+            >
+              Fit
+            </button>
+            <button
+              type="button"
+              onClick={() => zoom(1 / 1.25)}
+              aria-label="Zoom in"
+              className="h-8 w-9 text-sm text-ink-soft transition-colors hover:bg-evergreen-mist hover:text-evergreen"
+            >
+              +
+            </button>
+          </div>
         </div>
       </div>
 
@@ -261,6 +268,18 @@ export function TreeCanvas({
           role="application"
           aria-label={`Family tree: ${treeName}`}
         >
+          <defs>
+            <pattern id="canvas-dots" width="28" height="28" patternUnits="userSpaceOnUse">
+              <circle cx="1.4" cy="1.4" r="1.4" fill="var(--color-line)" opacity="0.5" />
+            </pattern>
+          </defs>
+          <rect
+            x={view.x}
+            y={view.y}
+            width={view.w}
+            height={view.w * aspect}
+            fill="url(#canvas-dots)"
+          />
           <Edges
             unions={unions}
             links={links}
@@ -409,6 +428,7 @@ function PersonNode({
   const card = (
     <>
       <rect
+        className="tnode-card"
         width={NODE_W}
         height={NODE_H}
         rx={14}

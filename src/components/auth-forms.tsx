@@ -4,15 +4,9 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { signinAction, signupAction, type AuthState } from "@/actions/auth";
 
-const inputClass =
-  "w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-ink placeholder:text-ink-soft/50 focus:border-evergreen focus:outline-none";
-
 function SubmitButton({ label }: { label: string }) {
   return (
-    <button
-      type="submit"
-      className="w-full rounded-lg bg-evergreen px-4 py-2.5 font-medium text-paper transition-colors hover:bg-evergreen-deep disabled:opacity-60"
-    >
+    <button type="submit" className="btn-primary w-full py-2.5">
       {label}
     </button>
   );
@@ -43,7 +37,7 @@ export function SignUpForm() {
           required
           autoComplete="name"
           placeholder="Ayesha Khan"
-          className={inputClass}
+          className="input"
         />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -54,7 +48,7 @@ export function SignUpForm() {
           required
           autoComplete="email"
           placeholder="you@example.com"
-          className={inputClass}
+          className="input"
         />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -66,7 +60,7 @@ export function SignUpForm() {
           minLength={8}
           autoComplete="new-password"
           placeholder="At least 8 characters"
-          className={inputClass}
+          className="input"
         />
       </label>
       <SubmitButton label={pending ? "Creating your tree…" : "Create my family tree"} />
@@ -96,7 +90,7 @@ export function SignInForm() {
           required
           autoComplete="email"
           placeholder="you@example.com"
-          className={inputClass}
+          className="input"
         />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -106,7 +100,7 @@ export function SignInForm() {
           type="password"
           required
           autoComplete="current-password"
-          className={inputClass}
+          className="input"
         />
       </label>
       <SubmitButton label={pending ? "Signing in…" : "Sign in"} />

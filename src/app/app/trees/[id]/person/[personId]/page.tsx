@@ -75,6 +75,11 @@ export default async function PersonPage({
     .where(eq(memories.personId, personId));
 
   const name = displayName(person);
+  const initials = [person.firstName, person.lastName]
+    .map((w) => (w ? w[0] : ""))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
   const facts: [string, string | null][] = [
     ["Known as", person.alsoKnownAs],
     ["Born", [person.birthDateText, person.birthPlace].filter(Boolean).join(" · ") || null],
@@ -95,15 +100,36 @@ export default async function PersonPage({
         ← Back to the tree
       </Link>
 
-      <header className="mt-4">
-        <h1 className="font-display text-4xl font-semibold text-ink">{name}</h1>
-        <p className="mt-1.5 text-ink-soft">
-          {lifeLine(person) || (person.living ? "Living" : "")}
-        </p>
+      <header className="mt-5 flex flex-wrap items-center gap-5">
+        <span
+          aria-hidden
+          className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full font-display text-2xl font-semibold ${
+            person.living
+              ? "bg-evergreen-mist text-evergreen-deep"
+              : "bg-rosewood-mist text-rosewood"
+          }`}
+        >
+          {initials || "?"}
+        </span>
+        <div className="min-w-0">
+          <h1 className="font-display text-4xl font-semibold text-ink">{name}</h1>
+          <p className="mt-1.5 flex flex-wrap items-center gap-2.5 text-ink-soft">
+            <span
+              className={`chip ${
+                person.living
+                  ? "bg-evergreen-mist text-evergreen-deep"
+                  : "bg-rosewood-mist text-rosewood"
+              }`}
+            >
+              {person.living ? "Living" : "At rest"}
+            </span>
+            <span>{lifeLine(person)}</span>
+          </p>
+        </div>
       </header>
 
       {person.notes && (
-        <blockquote className="mt-5 border-l-3 border-evergreen/40 pl-4 text-ink-soft italic">
+        <blockquote className="mt-5 border-l-[3px] border-evergreen/40 pl-4 font-display text-[15px] leading-relaxed text-ink-soft italic">
           {person.notes}
         </blockquote>
       )}
@@ -111,16 +137,19 @@ export default async function PersonPage({
       <div className="mt-8 grid gap-6 md:grid-cols-[1fr_1.4fr]">
         <section className="rounded-2xl border border-line bg-card p-5">
           <h2 className="font-display text-lg font-semibold text-ink">Facts</h2>
-          <dl className="mt-3 space-y-2.5 text-sm">
-            {facts.map(([label, value]) => (
-              <div key={label} className="flex justify-between gap-4">
+          <dl className="mt-3 text-sm">
+            {facts.map(([label, value], i) => (
+              <div
+                key={label}
+                className={`flex justify-between gap-4 py-2 ${i > 0 ? "border-t border-line/70" : ""}`}
+              >
                 <dt className="text-ink-soft">{label}</dt>
                 <dd className="text-right text-ink">{value ?? "—"}</dd>
               </div>
             ))}
           </dl>
 
-          <h3 className="mt-6 mb-2 text-xs font-semibold tracking-wide text-ink-soft uppercase">
+          <h3 className="mt-7 mb-3 border-t border-line pt-4 text-sm font-semibold text-ink">
             Relationships
           </h3>
           <RelList title="Parents" items={parents.map((p) => p.id)} personMap={personMap} treeId={treeId} />

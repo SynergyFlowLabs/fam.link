@@ -77,7 +77,7 @@ export default async function TreeCanvasPage({
         <p className="mt-2 text-ink-soft">
           An empty tree — every family starts with one person. Usually you.
         </p>
-        <div className="mt-8 max-w-xl rounded-2xl border border-line bg-card p-6 shadow-sm">
+        <div className="mt-8 max-w-xl rounded-2xl border border-line bg-card p-6">
           <h2 className="font-display text-lg font-semibold text-ink">
             Add the first person
           </h2>

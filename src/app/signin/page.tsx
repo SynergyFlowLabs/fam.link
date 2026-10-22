@@ -7,10 +7,10 @@ export const metadata = { title: "Sign in" };
 export default function SignInPage() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-12">
-      <Link href="/" className="mb-8">
+      <Link href="/" className="mb-8" aria-label="fam.link home">
         <Logo />
       </Link>
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-paper p-7 shadow-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-7 shadow-float">
         <h1 className="font-display text-2xl font-semibold text-ink">
           Welcome back
         </h1>
@@ -18,6 +18,15 @@ export default function SignInPage() {
           Pick up where your family left off.
         </p>
         <SignInForm />
+        <div className="mt-6 rounded-xl bg-gold-mist/70 px-4 py-3 text-xs leading-relaxed text-ink-soft">
+          <span className="font-medium text-ink">Just having a look?</span> Sign
+          in with the demo account —{" "}
+          <span className="font-mono text-[11px] text-ink">
+            demo@fam.link
+          </span>{" "}
+          /{" "}
+          <span className="font-mono text-[11px] text-ink">demo1234</span>
+        </div>
       </div>
     </main>
   );

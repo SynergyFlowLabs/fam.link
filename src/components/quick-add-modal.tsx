@@ -5,13 +5,11 @@ import { addFirstPersonAction, addRelativeAction } from "@/actions/persons";
 
 export type Relation = "father" | "mother" | "spouse" | "child";
 
-const inputClass =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-soft/50 focus:border-evergreen focus:outline-none";
 const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink-soft";
 
 function GenderSelect({ defaultValue }: { defaultValue?: string }) {
   return (
-    <select name="gender" defaultValue={defaultValue ?? ""} className={inputClass}>
+    <select name="gender" defaultValue={defaultValue ?? ""} className="input">
       <option value="">Leave unsaid</option>
       <option value="f">Female</option>
       <option value="m">Male</option>
@@ -26,11 +24,11 @@ function LifeFields({ defaultLiving = true }: { defaultLiving?: boolean }) {
     <>
       <label className={labelClass}>
         Born (any format — &ldquo;c. 1947&rdquo;, &ldquo;before Partition&rdquo;)
-        <input name="birthDateText" type="text" className={inputClass} placeholder="c. 1962, Karachi" />
+        <input name="birthDateText" type="text" className="input" placeholder="c. 1962, Karachi" />
       </label>
       <label className={labelClass}>
         Birthplace
-        <input name="birthPlace" type="text" className={inputClass} placeholder="Lahore" />
+        <input name="birthPlace" type="text" className="input" placeholder="Lahore" />
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -46,11 +44,11 @@ function LifeFields({ defaultLiving = true }: { defaultLiving?: boolean }) {
         <>
           <label className={labelClass}>
             Died (fuzzy is fine)
-            <input name="deathDateText" type="text" className={inputClass} placeholder="2010" />
+            <input name="deathDateText" type="text" className="input" placeholder="2010" />
           </label>
           <label className={labelClass}>
             Resting place
-            <input name="deathPlace" type="text" className={inputClass} placeholder="Multan" />
+            <input name="deathPlace" type="text" className="input" placeholder="Multan" />
           </label>
         </>
       )}
@@ -64,11 +62,11 @@ function PersonFields({ defaultGender }: { defaultGender?: string }) {
       <div className="grid grid-cols-2 gap-3">
         <label className={labelClass}>
           First / given name
-          <input name="firstName" type="text" className={inputClass} placeholder="Zainab" autoFocus />
+          <input name="firstName" type="text" className="input" placeholder="Zainab" autoFocus />
         </label>
         <label className={labelClass}>
           Family name
-          <input name="lastName" type="text" className={inputClass} placeholder="Khan" />
+          <input name="lastName" type="text" className="input" placeholder="Khan" />
         </label>
       </div>
       <label className={labelClass}>
@@ -78,7 +76,7 @@ function PersonFields({ defaultGender }: { defaultGender?: string }) {
       <LifeFields />
       <label className={labelClass}>
         Anything you know (notes)
-        <textarea name="notes" rows={2} className={inputClass} placeholder="Came from Amritsar in 1947…" />
+        <textarea name="notes" rows={2} className="input" placeholder="Came from Amritsar in 1947…" />
       </label>
     </>
   );
@@ -109,7 +107,7 @@ export function QuickAddModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4"
+      className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-ink/35 p-4 backdrop-blur-[2px]"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -117,7 +115,7 @@ export function QuickAddModal({
       aria-modal="true"
       aria-label={`Add ${relation} to ${anchorName}`}
     >
-      <div className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-line bg-card p-6 shadow-xl">
+      <div className="dialog-surface max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-line bg-card p-6 shadow-float">
         <h2 className="font-display text-xl font-semibold text-ink">
           Add {anchorName}&apos;s {relationCopy[relation]}
         </h2>
@@ -142,15 +140,11 @@ export function QuickAddModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-line px-4 py-2 text-sm text-ink-soft transition-colors hover:text-ink"
+              className="btn-secondary px-4 py-2 text-sm"
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-lg bg-evergreen px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-evergreen-deep disabled:opacity-60"
-            >
+            <button type="submit" disabled={pending} className="btn-primary text-sm">
               {pending ? "Adding…" : "Add to tree"}
             </button>
           </div>
@@ -173,11 +167,7 @@ export function FirstPersonForm({ treeId }: { treeId: string }) {
     >
       <input type="hidden" name="treeId" value={treeId} />
       <PersonFields />
-      <button
-        type="submit"
-        disabled={pending}
-        className="mt-1 self-start rounded-lg bg-evergreen px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-evergreen-deep disabled:opacity-60"
-      >
+      <button type="submit" disabled={pending} className="btn-primary mt-1 self-start text-sm">
         {pending ? "Adding…" : "Add person"}
       </button>
     </form>
