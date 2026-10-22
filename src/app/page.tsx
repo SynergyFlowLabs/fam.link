@@ -116,7 +116,7 @@ export default async function LandingPage() {
           <h2 className="font-display text-2xl font-semibold text-ink">
             How a tree grows
           </h2>
-          <ol className="relative mt-10 grid gap-10 md:grid-cols-3 md:gap-8">
+          <ol className="relative mt-10 grid list-none gap-10 md:grid-cols-3 md:gap-8">
             <div
               aria-hidden
               className="absolute right-2 left-2 top-[7px] hidden h-px bg-line md:block"
