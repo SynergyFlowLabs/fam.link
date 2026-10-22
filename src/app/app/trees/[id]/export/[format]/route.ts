@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
-import { ownedTree } from "@/actions/trees";
+import { getTreeAccess } from "@/lib/access";
 import { db } from "@/db";
 import {
   memories,
@@ -18,8 +18,11 @@ export async function GET(
   const { id: treeId, format } = await params;
   const user = await getCurrentUser();
   if (!user) return new Response("Not found", { status: 404 });
-  const tree = await ownedTree(treeId, user.id);
-  if (!tree) return new Response("Not found", { status: 404 });
+  // Exports are part of the no-lock-in promise: every member of a tree
+  // (owner, editor, commenter, viewer) can take their data out.
+  const access = await getTreeAccess(treeId, user.id);
+  if (!access) return new Response("Not found", { status: 404 });
+  const tree = access.tree;
 
   const personRows = await db
     .select()

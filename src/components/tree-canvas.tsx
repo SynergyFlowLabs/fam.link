@@ -48,11 +48,20 @@ interface Props {
   focusPersonId: string;
   /** Public share view: no links, no quick-add, no exports. */
   readOnly?: boolean;
+  /**
+   * Content-editing affordances (quick-add pills, re-root button). Defaults
+   * to !readOnly — pass false for viewer/commenter members.
+   */
+  canEdit?: boolean;
+  /** Export menu (defaults to !readOnly — every member can export). */
+  showExport?: boolean;
   /** Shown under the title on a share view (e.g. privacy note). */
   shareNote?: string | null;
-  /** Extra header controls (owner view: Share menu). */
+  /** Small note under the title for invited members (e.g. their role). */
+  memberNote?: string | null;
+  /** Extra header controls (owner view: Share + Members). */
   headerExtra?: React.ReactNode;
-  /** Owner view: link to the GEDCOM import review screen. */
+  /** Editor-and-up: link to the GEDCOM import review screen. */
   importHref?: string | null;
 }
 
@@ -66,10 +75,15 @@ export function TreeCanvas({
   links,
   focusPersonId,
   readOnly = false,
+  canEdit,
+  showExport,
   shareNote = null,
+  memberNote = null,
   headerExtra = null,
   importHref = null,
 }: Props) {
+  const editable = canEdit ?? !readOnly;
+  const exportsOn = showExport ?? !readOnly;
   const layout: LayoutResult = useMemo(
     () =>
       layoutTree({
@@ -264,6 +278,9 @@ export function TreeCanvas({
             {totalMemories > 0 ? ` · ${totalMemories} memories` : ""}
             {focusPerson ? ` · centered on ${displayName(focusPerson)}` : ""}
           </p>
+          {memberNote && (
+            <p className="text-[11px] leading-snug text-evergreen">{memberNote}</p>
+          )}
           {shareNote && (
             <p className="text-[11px] leading-snug text-ink-soft/80">{shareNote}</p>
           )}
@@ -272,8 +289,8 @@ export function TreeCanvas({
           {persons.length > 5 && (
             <TreeSearch persons={persons} onLocate={locatePerson} />
           )}
-          {!readOnly && headerExtra}
-          {!readOnly && importHref && (
+          {headerExtra}
+          {editable && importHref && (
             <a
               href={importHref}
               className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
@@ -281,7 +298,7 @@ export function TreeCanvas({
               Import
             </a>
           )}
-          {!readOnly && (
+          {exportsOn && (
           <details className="relative">
             <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">
               Export
@@ -384,7 +401,8 @@ export function TreeCanvas({
                 isFocus={n.id === focusPersonId}
                 hovered={hoverId === n.id}
                 flash={highlightId === n.id}
-                readOnly={readOnly}
+                linked={!readOnly}
+                canEdit={editable}
                 onHover={setHoverId}
                 onQuickAdd={(relation) => setModal({ anchorId: n.id, relation })}
               />
@@ -549,7 +567,8 @@ function PersonNode({
   isFocus,
   hovered,
   flash = false,
-  readOnly = false,
+  linked = true,
+  canEdit = true,
   onHover,
   onQuickAdd,
 }: {
@@ -561,7 +580,10 @@ function PersonNode({
   hovered: boolean;
   /** Briefly ring this person (search "found them" moment). */
   flash?: boolean;
-  readOnly?: boolean;
+  /** Card is a link to the person page (share views: false). */
+  linked?: boolean;
+  /** Quick-add pills + re-root button (owner/editor only). */
+  canEdit?: boolean;
   onHover: (id: string | null) => void;
   onQuickAdd: (relation: Relation) => void;
 }) {
@@ -639,7 +661,7 @@ function PersonNode({
           that appeared because of the hover (pills above, center button
           below), so moving toward a control never drops the hover. It
           renders before the card so card clicks still land on the link. */}
-      {hovered && !readOnly && (
+      {hovered && canEdit && (
         <rect
           x={-16}
           y={-58}
@@ -648,10 +670,10 @@ function PersonNode({
           fill="transparent"
         />
       )}
-      {readOnly ? (
-        <g>{card}</g>
-      ) : (
+      {linked ? (
         <a href={`/app/trees/${treeId}/person/${person.id}`}>{card}</a>
+      ) : (
+        <g>{card}</g>
       )}
 
       {flash && (
@@ -668,7 +690,7 @@ function PersonNode({
         />
       )}
 
-      {hovered && !readOnly && (
+      {hovered && canEdit && (
         <g>
           {pills.map((pill) => (
             <g

@@ -25,9 +25,23 @@ mkdirSync(path.join(DATA_DIR, "uploads"), { recursive: true });
 const SQLITE_PATH = path.join(DATA_DIR, "app.db");
 
 /**
- * Apply embedded migrations. Safe on fresh databases (creates everything)
- * and on existing ones (idempotent SQL + baseline detection).
+ * Apply embedded migrations. All statements are idempotent by construction
+ * (CREATE … IF NOT EXISTS); the one exception — `ALTER TABLE … ADD COLUMN`,
+ * which SQLite has no IF NOT EXISTS form for — is tolerated by catching the
+ * "duplicate column name" error, so a migration may also run against a
+ * database that already has the column (e.g. created via `drizzle-kit push`).
  */
+function execIdempotent(sqlite: Database.Database, statement: string): void {
+  try {
+    sqlite.exec(statement);
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("duplicate column name")) {
+      return; // column already there — the migration's job is done
+    }
+    throw err;
+  }
+}
+
 function ensureSchema(sqlite: Database.Database): void {
   sqlite
     .prepare(
@@ -35,22 +49,12 @@ function ensureSchema(sqlite: Database.Database): void {
     )
     .run();
 
-  const hasUsers = (
-    sqlite
-      .prepare(
-        "SELECT COUNT(*) AS c FROM sqlite_master WHERE type = 'table' AND name = 'users'",
-      )
-      .get() as { c: number }
-  ).c;
-
-  if (hasUsers > 0) {
-    // Existing database (e.g. created via drizzle-kit push): baseline it.
-    const baseline = sqlite.prepare(
-      "INSERT OR IGNORE INTO __migrations (name) VALUES (?)",
-    );
-    for (const m of MIGRATIONS) baseline.run(m.name);
-    return;
-  }
+  // A database with tables but no __migrations rows was created outside the
+  // runner (e.g. `drizzle-kit push` in dev, or an older build). Since every
+  // statement is idempotent, it is safe — and correct — to simply run the
+  // normal loop against it: present tables no-op, missing ones are created.
+  // The recorded names then behave exactly like a runner-created database,
+  // so later migrations apply once, on boot, going forward.
 
   for (const migration of MIGRATIONS) {
     const applied = (
@@ -60,7 +64,7 @@ function ensureSchema(sqlite: Database.Database): void {
     ).c;
     if (applied > 0) continue;
     for (const statement of migration.statements) {
-      sqlite.exec(statement);
+      execIdempotent(sqlite, statement);
     }
     sqlite
       .prepare("INSERT INTO __migrations (name) VALUES (?)")

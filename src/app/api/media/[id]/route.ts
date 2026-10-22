@@ -1,14 +1,14 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, DATA_DIR } from "@/db";
-import { media, trees } from "@/db/schema";
+import { media, treeMembers, trees } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { getShareLinkByToken } from "@/lib/share";
 
 /**
- * Serves uploaded media. Two ways to see a file:
- *  1. Signed-in owner of the tree the media belongs to.
+ * Serves uploaded media. Three ways to see a file:
+ *  1. Signed-in owner or invited member of the tree the media belongs to.
  *  2. A valid share token (?t=…) for that tree — used by the public
  *     read-only share view.
  * Everyone else gets a 404 (not 403 — existence stays private).
@@ -32,6 +32,18 @@ export async function GET(
   const user = await getCurrentUser();
   if (user && row.ownerId === user.id) {
     allowed = true;
+  } else if (user) {
+    const memberRows = await db
+      .select({ id: treeMembers.id })
+      .from(treeMembers)
+      .where(
+        and(
+          eq(treeMembers.treeId, row.media.treeId),
+          eq(treeMembers.userId, user.id),
+        ),
+      )
+      .limit(1);
+    allowed = memberRows.length > 0;
   } else {
     const token = new URL(req.url).searchParams.get("t");
     if (token) {
