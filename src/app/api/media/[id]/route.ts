@@ -4,19 +4,20 @@ import { eq } from "drizzle-orm";
 import { db, DATA_DIR } from "@/db";
 import { media, trees } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { getShareLinkByToken } from "@/lib/share";
 
 /**
- * Serves uploaded media. Private by default: only the owning signed-in user
- * can fetch a file. (Share-link access arrives with the sharing feature and
- * will extend this check.)
+ * Serves uploaded media. Two ways to see a file:
+ *  1. Signed-in owner of the tree the media belongs to.
+ *  2. A valid share token (?t=…) for that tree — used by the public
+ *     read-only share view.
+ * Everyone else gets a 404 (not 403 — existence stays private).
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await params;
-  const user = await getCurrentUser();
-  if (!user) return new Response("Not found", { status: 404 });
 
   const rows = await db
     .select({ media, ownerId: trees.ownerId })
@@ -25,9 +26,20 @@ export async function GET(
     .where(eq(media.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row || row.ownerId !== user.id) {
-    return new Response("Not found", { status: 404 });
+  if (!row) return new Response("Not found", { status: 404 });
+
+  let allowed = false;
+  const user = await getCurrentUser();
+  if (user && row.ownerId === user.id) {
+    allowed = true;
+  } else {
+    const token = new URL(req.url).searchParams.get("t");
+    if (token) {
+      const link = await getShareLinkByToken(token);
+      if (link && link.treeId === row.media.treeId) allowed = true;
+    }
   }
+  if (!allowed) return new Response("Not found", { status: 404 });
 
   try {
     const file = await readFile(

@@ -30,4 +30,12 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
         "CREATE UNIQUE INDEX IF NOT EXISTS `users_email_unique` ON `users` (`email`);"
     ],
   },
+  {
+    name: "0001_strange_avengers",
+    statements: [
+        "CREATE TABLE IF NOT EXISTS `share_links` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`token` text NOT NULL,\n\t`label` text,\n\t`created_by` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\t`revoked_at` integer,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+        "CREATE UNIQUE INDEX IF NOT EXISTS `share_links_token_unique` ON `share_links` (`token`);",
+        "CREATE INDEX IF NOT EXISTS `share_links_tree_idx` ON `share_links` (`tree_id`);",
+    ],
+  },
 ];

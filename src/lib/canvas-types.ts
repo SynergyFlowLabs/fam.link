@@ -12,6 +12,8 @@ export interface CanvasPerson {
   deathDateText: string | null;
   deathPlace: string | null;
   memoryCount: number;
+  /** True when details are hidden for a living person on a public share view. */
+  redacted?: boolean;
 }
 
 export interface CanvasUnion {
@@ -45,4 +47,28 @@ export function lifeLine(p: {
   const birth = p.birthDateText ?? "?";
   const death = p.deathDateText ?? "?";
   return `${birth} – ${death}`;
+}
+
+export const REDACTED_NAME = "Living relative";
+
+/**
+ * Privacy for public share views: living relatives keep their place in the
+ * tree structure but lose names, dates, places, and memory counts. Deceased
+ * relatives are shown in full. Returns the same object if not living.
+ */
+export function redactPerson(p: CanvasPerson): CanvasPerson {
+  if (!p.living) return p;
+  return {
+    ...p,
+    firstName: null,
+    lastName: null,
+    alsoKnownAs: null,
+    gender: null,
+    birthDateText: null,
+    birthPlace: null,
+    deathDateText: null,
+    deathPlace: null,
+    memoryCount: 0,
+    redacted: true,
+  };
 }

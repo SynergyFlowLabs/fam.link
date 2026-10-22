@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { layoutTree, NODE_W, NODE_H, type LayoutResult } from "@/lib/layout/engine";
-import { displayName, lifeLine, type CanvasLink, type CanvasPerson, type CanvasUnion } from "@/lib/canvas-types";
+import {
+  displayName,
+  lifeLine,
+  REDACTED_NAME,
+  type CanvasLink,
+  type CanvasPerson,
+  type CanvasUnion,
+} from "@/lib/canvas-types";
 import { setFocusPersonAction } from "@/actions/persons";
 import { QuickAddModal, type Relation } from "./quick-add-modal";
 
@@ -19,6 +26,12 @@ interface Props {
   unions: CanvasUnion[];
   links: CanvasLink[];
   focusPersonId: string;
+  /** Public share view: no links, no quick-add, no exports. */
+  readOnly?: boolean;
+  /** Shown under the title on a share view (e.g. privacy note). */
+  shareNote?: string | null;
+  /** Extra header controls (owner view: Share menu). */
+  headerExtra?: React.ReactNode;
 }
 
 const MIN_W = 360;
@@ -30,6 +43,9 @@ export function TreeCanvas({
   unions,
   links,
   focusPersonId,
+  readOnly = false,
+  shareNote = null,
+  headerExtra = null,
 }: Props) {
   const layout: LayoutResult = useMemo(
     () =>
@@ -169,8 +185,13 @@ export function TreeCanvas({
             {totalMemories > 0 ? ` · ${totalMemories} memories` : ""}
             {focusPerson ? ` · centered on ${displayName(focusPerson)}` : ""}
           </p>
+          {shareNote && (
+            <p className="text-[11px] leading-snug text-ink-soft/80">{shareNote}</p>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
+          {!readOnly && headerExtra}
+          {!readOnly && (
           <details className="relative">
             <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">
               Export
@@ -199,6 +220,7 @@ export function TreeCanvas({
               </p>
             </div>
           </details>
+          )}
           <button
             type="button"
             onClick={() => zoom(1 / 1.25)}
@@ -257,6 +279,7 @@ export function TreeCanvas({
                 y={n.y}
                 isFocus={n.id === focusPersonId}
                 hovered={hoverId === n.id}
+                readOnly={readOnly}
                 onHover={setHoverId}
                 onQuickAdd={(relation) => setModal({ anchorId: n.id, relation })}
               />
@@ -354,6 +377,7 @@ function PersonNode({
   y,
   isFocus,
   hovered,
+  readOnly = false,
   onHover,
   onQuickAdd,
 }: {
@@ -363,12 +387,14 @@ function PersonNode({
   y: number;
   isFocus: boolean;
   hovered: boolean;
+  readOnly?: boolean;
   onHover: (id: string | null) => void;
   onQuickAdd: (relation: Relation) => void;
 }) {
   const [focusPending, startFocusTransition] = useTransition();
-  const name = displayName(person);
-  const isUnknown = name === "Unknown";
+  const redacted = person.redacted === true;
+  const name = redacted ? REDACTED_NAME : displayName(person);
+  const isUnknown = !redacted && name === "Unknown";
   const dates = lifeLine(person);
   const left = x - NODE_W / 2;
   const top = y - NODE_H / 2;
@@ -380,6 +406,46 @@ function PersonNode({
     { label: "+ child", relation: "child", dx: 66 },
   ];
 
+  const card = (
+    <>
+      <rect
+        width={NODE_W}
+        height={NODE_H}
+        rx={14}
+        fill={isUnknown ? "transparent" : "var(--color-card)"}
+        stroke={isFocus ? "var(--color-evergreen)" : isUnknown ? "var(--color-ink-soft)" : "var(--color-line)"}
+        strokeWidth={isFocus ? 2.5 : 1.5}
+        strokeDasharray={isUnknown ? "5 5" : undefined}
+      />
+      <text
+        x={NODE_W / 2}
+        y={30}
+        textAnchor="middle"
+        fontSize={15}
+        fontWeight={500}
+        fill={
+          isUnknown || redacted
+            ? "var(--color-ink-soft)"
+            : person.living
+              ? "var(--color-ink)"
+              : "var(--color-rosewood)"
+        }
+        fontStyle={isUnknown || redacted ? "italic" : undefined}
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        {name}
+      </text>
+      <text x={NODE_W / 2} y={48} textAnchor="middle" fontSize={10.5} fill="var(--color-ink-soft)" opacity={0.85}>
+        {dates}
+      </text>
+      {person.memoryCount > 0 && (
+        <text x={NODE_W - 12} y={22} textAnchor="end" fontSize={11} fill="var(--color-gold)">
+          ✻ {person.memoryCount}
+        </text>
+      )}
+    </>
+  );
+
   return (
     <g
       data-node
@@ -389,39 +455,13 @@ function PersonNode({
     >
       {/* hover hit area larger than the card */}
       <rect x={-10} y={-34} width={NODE_W + 20} height={NODE_H + 68} fill="transparent" />
-      <a href={`/app/trees/${treeId}/person/${person.id}`}>
-        <rect
-          width={NODE_W}
-          height={NODE_H}
-          rx={14}
-          fill={isUnknown ? "transparent" : "var(--color-card)"}
-          stroke={isFocus ? "var(--color-evergreen)" : isUnknown ? "var(--color-ink-soft)" : "var(--color-line)"}
-          strokeWidth={isFocus ? 2.5 : 1.5}
-          strokeDasharray={isUnknown ? "5 5" : undefined}
-        />
-        <text
-          x={NODE_W / 2}
-          y={30}
-          textAnchor="middle"
-          fontSize={15}
-          fontWeight={500}
-          fill={isUnknown ? "var(--color-ink-soft)" : person.living ? "var(--color-ink)" : "var(--color-rosewood)"}
-          fontStyle={isUnknown ? "italic" : undefined}
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          {isUnknown ? "Unknown" : name}
-        </text>
-        <text x={NODE_W / 2} y={48} textAnchor="middle" fontSize={10.5} fill="var(--color-ink-soft)" opacity={0.85}>
-          {dates}
-        </text>
-        {person.memoryCount > 0 && (
-          <text x={NODE_W - 12} y={22} textAnchor="end" fontSize={11} fill="var(--color-gold)">
-            ✻ {person.memoryCount}
-          </text>
-        )}
-      </a>
+      {readOnly ? (
+        <g>{card}</g>
+      ) : (
+        <a href={`/app/trees/${treeId}/person/${person.id}`}>{card}</a>
+      )}
 
-      {hovered && (
+      {hovered && !readOnly && (
         <g>
           {pills.map((pill) => (
             <g

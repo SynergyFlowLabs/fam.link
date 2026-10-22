@@ -66,7 +66,7 @@ export async function signupAction(
     living: true,
   });
 
-  await createSession(userId);
+  await createSession({ id: userId, email });
   redirect("/app");
 }
 
@@ -89,7 +89,7 @@ export async function signinAction(
     return { error: "Email or password is incorrect." };
   }
 
-  await createSession(user.id);
+  await createSession({ id: user.id, email: user.email });
   redirect("/app");
 }
 
