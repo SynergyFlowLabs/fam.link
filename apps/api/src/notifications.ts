@@ -35,6 +35,74 @@ export interface Notification {
   readonly action?: 'proposals' | 'people' | 'invitations' | 'activity';
 }
 
+/**
+ * Categories a person can switch off. Safety-critical feed items — a separation request, a report
+ * about a profile — are deliberately absent: an administrator who could mute those could stop
+ * hearing about harm, which is not a preference.
+ */
+export const NOTIFICATION_CATEGORIES: ReadonlyArray<{
+  id: string;
+  label: string;
+  description: string;
+  mutable: boolean;
+}> = [
+  {
+    id: 'proposals',
+    label: 'Changes needing my decision',
+    description: 'A relative proposes a correction to a profile you manage, and decisions on your own proposals.',
+    mutable: true,
+  },
+  {
+    id: 'invitations',
+    label: 'Invitations',
+    description: 'When someone opens or accepts a link you shared, and when a relative joins the space.',
+    mutable: true,
+  },
+  {
+    id: 'claims',
+    label: 'Profile claims',
+    description: 'When a relative claims a profile that was sitting unclaimed.',
+    mutable: true,
+  },
+  {
+    id: 'admin',
+    label: 'Duplicates to review',
+    description: 'Possible duplicate people, suggested by the same checks the review queue uses.',
+    mutable: true,
+  },
+  {
+    id: 'safety',
+    label: 'Safety',
+    description: 'Separation requests and reports. These cannot be switched off.',
+    mutable: false,
+  },
+];
+
+const CATEGORY_OF_KIND: Readonly<Record<Notification['kind'], string>> = {
+  'proposal.pending': 'proposals',
+  'proposal.decided': 'proposals',
+  'invitation.opened': 'invitations',
+  'invitation.accepted': 'invitations',
+  member: 'invitations',
+  claim: 'claims',
+  duplicates: 'admin',
+  separation: 'safety',
+};
+
+export function categoryOf(kind: Notification['kind']): string {
+  return CATEGORY_OF_KIND[kind] ?? 'admin';
+}
+
+/** True when this category is on for the member (defaults to on). */
+export function categoryEnabled(
+  preferences: Readonly<Record<string, boolean>> | undefined,
+  category: string,
+): boolean {
+  const definition = NOTIFICATION_CATEGORIES.find((entry) => entry.id === category);
+  if (definition && !definition.mutable) return true;
+  return preferences?.[category] !== false;
+}
+
 export function notificationsFor(store: Store, spaceId: Id, userId: Id): Notification[] {
   const membership = membershipFor(store, spaceId, userId);
   if (!membership) return [];
@@ -167,7 +235,10 @@ export function notificationsFor(store: Store, spaceId: Id, userId: Id): Notific
     }
   }
 
-  return notifications.sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 30);
+  const preferences = membership.notificationPreferences;
+  const allowed = notifications.filter((notification) => categoryEnabled(preferences, categoryOf(notification.kind)));
+
+  return allowed.sort((left, right) => right.createdAt.localeCompare(left.createdAt)).slice(0, 30);
 }
 
 export function unreadCount(store: Store, spaceId: Id, userId: Id, notifications: readonly Notification[]): number {

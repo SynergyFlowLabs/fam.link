@@ -287,6 +287,28 @@ Tab through cards. Movement now follows the relationships themselves:
 
 ---
 
+### Step 14 — Notification preferences, with safety notices that cannot be muted ✅
+
+The feed is derived at read time (ADR 0004), so "muting" has to mean filtering per member, not
+stopping writes. That is what shipped:
+
+- `Membership.notificationPreferences` stores per-category opt-outs; the default is on.
+- Four categories are mutable — proposals needing a decision, invitations, profile claims, duplicate
+  review. **Safety is not**: separation requests and reports are always delivered, and the API
+  answers 422 rather than pretending to accept the change. A preference that can silence a harm
+  report is not a preference.
+- `GET`/`PATCH /spaces/:id/notifications/preferences`. The read returns each category, whether it is
+  mutable, and its current state, so the UI never renders a control that the API will reject.
+- Privacy screen: a "What reaches you" card with switches, plus an explicit "Always on" chip for
+  safety. Copy states that only your own feed changes.
+- Six tests: defaults, mute affects one member only, re-enable, safety refusal, validation of
+  category and value, and an unread count that stays consistent with what the member can see.
+
+**Verification:** **141 tests passing**, typecheck clean, web build 301 kB (91 kB gzip). Confirmed
+against the running API that muting `claims` leaves `safety` enabled and the safety PATCH returns 422.
+
+---
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.
@@ -297,7 +319,7 @@ Ordered by the MVP's actual question — *will relatives collaborate?* — not b
 | 2 | Invitation delivery (email + WhatsApp send) with bounce/opt-out handling | F-4.2 | Links are generated but never sent, so the loop cannot be measured in the wild |
 | 3 | ~~Read back your own visibility configuration~~ | F-6.2 | ✅ Step 9 |
 | 4 | ~~Merge reversal from the merge log~~ | F-8.3 | ✅ Step 10 |
-| 5 | Notification preferences and a real outbox for delivery | F-9.3 | Derived feed works in-product; delivery needs an idempotent outbox (ADR 0004) |
+| 5 | Delivery outbox (email/WhatsApp) for notifications | F-9.3 | Preferences shipped in Step 14; sending still needs an idempotent outbox (ADR 0004) |
 | 6 | Full localisation of screen bodies, dialogs, invite copy | F-9.2 | Shell and tree are done; the rest is English |
 | 7 | Per-node branch collapse | F-3.3 | Keyboard navigation shipped in Step 13; collapsing a single branch is still pending |
 | 8 | Cross-space person linking and a space switcher | post-MVP (D-2) | Needed once a user belongs to paternal, maternal and in-law spaces |

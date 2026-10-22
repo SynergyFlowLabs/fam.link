@@ -851,3 +851,52 @@ a {
     animation: none !important;
   }
 }
+
+/* Notification preference toggle: a checkbox that reads as a switch, without hiding the input. */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch input {
+  width: 2.4rem;
+  height: 1.3rem;
+  appearance: none;
+  background: var(--line);
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  transition: background 120ms ease;
+  flex: none;
+}
+
+.switch input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.3rem - 4px);
+  height: calc(1.3rem - 4px);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform 120ms ease;
+}
+
+.switch input:checked {
+  background: var(--verdigris);
+}
+
+.switch input:checked::after {
+  transform: translateX(calc(2.4rem - 1.3rem));
+}
+
+.switch input:focus-visible {
+  outline: 2px solid var(--focus, var(--brass));
+  outline-offset: 2px;
+}

@@ -36,6 +36,7 @@ export function PrivacyView({
   onSignOut: () => void;
 }) {
   const branches = useAsync(() => api.hiddenBranches(spaceId), [spaceId]);
+  const preferences = useAsync(() => api.notificationPreferences(spaceId), [spaceId]);
   const people = useAsync(() => api.people(spaceId), [spaceId]);
   const profile = useAsync(() => (personId ? api.person(spaceId, personId) : Promise.resolve(null)), [spaceId, personId]);
   const person = profile.data?.person;
@@ -184,6 +185,56 @@ export function PrivacyView({
               No hidden branches.
             </p>
           ) : null}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="section-title">
+          <h3 style={{ fontSize: 'var(--step-1)' }}>What reaches you</h3>
+          <span className="hint">Only your own feed changes</span>
+        </div>
+        <p className="small muted" style={{ margin: '0 0 var(--sp-3)' }}>
+          Choose what appears in your notifications. Nothing here changes what relatives see, and a safety notice
+          cannot be switched off.
+        </p>
+        <div className="list">
+          {(preferences.data?.categories ?? []).map((category) => (
+            <div className="row" key={category.id}>
+              <div className="row__main">
+                <div className="row__subject">{category.label}</div>
+                <div className="row__sub">{category.description}</div>
+              </div>
+              <div className="row__actions">
+                {category.mutable ? (
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={category.enabled}
+                      onChange={async (event) => {
+                        try {
+                          const result = await api.setNotificationPreference(spaceId, category.id, event.target.checked);
+                          preferences.reload();
+                          setMessage({
+                            tone: 'ok',
+                            text: `${category.label}: ${result.categories.find((entry) => entry.id === category.id)?.enabled ? 'on' : 'off'}.`,
+                          });
+                        } catch (error) {
+                          setMessage({
+                            tone: 'danger',
+                            text: error instanceof Error ? error.message : 'Could not change that setting.',
+                          });
+                          preferences.reload();
+                        }
+                      }}
+                    />
+                    <span>{category.enabled ? 'On' : 'Off'}</span>
+                  </label>
+                ) : (
+                  <Chip tone="brass">Always on</Chip>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

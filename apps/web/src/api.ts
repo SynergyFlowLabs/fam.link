@@ -291,6 +291,15 @@ export const api = {
     call<{ notifications: Notification[]; unread: number }>(`/api/spaces/${spaceId}/notifications`),
   markNotificationsSeen: (spaceId: string) =>
     call<{ ok: true }>(`/api/spaces/${spaceId}/notifications/seen`, { method: 'POST', body: '{}' }),
+  notificationPreferences: (spaceId: string) =>
+    call<{
+      categories: Array<{ id: string; label: string; description: string; mutable: boolean; enabled: boolean }>;
+    }>(`/api/spaces/${spaceId}/notifications/preferences`),
+  setNotificationPreference: (spaceId: string, category: string, enabled: boolean) =>
+    call<{ ok: true; categories: Array<{ id: string; label: string; description: string; mutable: boolean; enabled: boolean }> }>(
+      `/api/spaces/${spaceId}/notifications/preferences`,
+      { method: 'PATCH', body: JSON.stringify({ category, enabled }) },
+    ),
   disputes: (spaceId: string) => call<{ disputes: DisputeGroup[] }>(`/api/spaces/${spaceId}/disputes`),
   revertActivity: (spaceId: string, activityId: string) =>
     call<{ ok: true }>(`/api/spaces/${spaceId}/activity/${activityId}/revert`, { method: 'POST', body: '{}' }),

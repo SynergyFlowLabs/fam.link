@@ -57,7 +57,7 @@ import {
   userById,
   type Store,
 } from './db.js';
-import { notificationsFor, unreadCount } from './notifications.js';
+import { NOTIFICATION_CATEGORIES, notificationsFor, unreadCount } from './notifications.js';
 
 /**
  * HTTP API.
@@ -1754,6 +1754,68 @@ export function createApp(): express.Express {
       saveStore();
     }
     response.json({ ok: true });
+  });
+
+  /**
+   * Notification preferences. Only the member's own feed is affected, and safety categories cannot
+   * be muted — the API rejects an attempt rather than silently ignoring it.
+   */
+  app.get('/api/spaces/:spaceId/notifications/preferences', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, userId } = ctx as Required<Context>;
+    const membership = membershipFor(store, spaceId, userId);
+    response.json({
+      categories: NOTIFICATION_CATEGORIES.map((category) => ({
+        ...category,
+        enabled: category.mutable ? membership?.notificationPreferences?.[category.id] !== false : true,
+      })),
+    });
+  });
+
+  app.patch('/api/spaces/:spaceId/notifications/preferences', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, userId } = ctx as Required<Context>;
+    const membership = membershipFor(store, spaceId, userId);
+    if (!membership) {
+      response.status(403).json({ error: 'You are not a member of this family space.' });
+      return;
+    }
+    const body = request.body as { category?: string; enabled?: boolean };
+    const category = NOTIFICATION_CATEGORIES.find((entry) => entry.id === body.category);
+    if (!category) {
+      response.status(400).json({ error: 'Unknown notification category.' });
+      return;
+    }
+    if (!category.mutable) {
+      response.status(422).json({ error: `${category.label} cannot be switched off.` });
+      return;
+    }
+    if (typeof body.enabled !== 'boolean') {
+      response.status(400).json({ error: 'enabled must be true or false.' });
+      return;
+    }
+    (membership as unknown as { notificationPreferences: Record<string, boolean> }).notificationPreferences = {
+      ...(membership.notificationPreferences ?? {}),
+      [category.id]: body.enabled,
+    };
+    saveStore();
+    response.json({
+      ok: true,
+      categories: NOTIFICATION_CATEGORIES.map((entry) => ({
+        ...entry,
+        enabled: entry.mutable ? membership.notificationPreferences?.[entry.id] !== false : true,
+      })),
+    });
   });
 
   app.get('/api/spaces/:spaceId/disputes', (request, response) => {

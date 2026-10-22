@@ -142,6 +142,11 @@ export interface Membership {
   readonly joinedAt: string;
   /** When this member last looked at their notifications. Drives the unread count. */
   readonly notificationSeenAt?: string;
+  /**
+   * Per-category opt-outs for the in-product notification feed. Safety categories are not listed,
+   * because they cannot be muted (see notifications.ts).
+   */
+  readonly notificationPreferences?: Readonly<Record<string, boolean>>;
 }
 
 export interface FamilySpace {
