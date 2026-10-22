@@ -1,69 +1,142 @@
-import Image from "next/image";
+import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
+import { Logo } from "@/components/logo";
+import { HeroTree } from "@/components/hero-tree";
 
-export default function Home() {
+export default async function LandingPage() {
+  const user = await getCurrentUser();
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <div className="min-h-dvh">
+      <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+        <Logo />
+        <nav className="flex items-center gap-5 text-sm">
+          {user ? (
+            <Link
+              href="/app"
+              className="rounded-lg bg-evergreen px-4 py-2 font-medium text-paper transition-colors hover:bg-evergreen-deep"
+            >
+              Open your trees
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/signin"
+                className="text-ink-soft transition-colors hover:text-evergreen"
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-lg bg-evergreen px-4 py-2 font-medium text-paper transition-colors hover:bg-evergreen-deep"
+              >
+                Start your tree
+              </Link>
+            </>
+          )}
+        </nav>
+      </header>
+
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 md:grid-cols-[1.05fr_1fr] md:py-20">
+        <div>
+          <h1 className="font-display text-4xl leading-[1.1] font-semibold text-ink md:text-[3.4rem]">
+            Your family,
+            <br />
+            remembered.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-5 max-w-md text-lg leading-relaxed text-ink-soft">
+            Build your family tree as deep as you know it — then hang the
+            photos, voices, and stories on every branch. What your family
+            knows deserves better than a paywalled database.
           </p>
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <Link
+              href="/signup"
+              className="rounded-xl bg-evergreen px-6 py-3 font-medium text-paper shadow-sm transition-colors hover:bg-evergreen-deep"
+            >
+              Start your tree — it&apos;s free
+            </Link>
+            <Link
+              href="/signin"
+              className="rounded-xl border border-line px-6 py-3 font-medium text-ink transition-colors hover:border-evergreen hover:text-evergreen"
+            >
+              Sign in
+            </Link>
+          </div>
+          <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-soft">
+            <li>Free forever, unlimited people</li>
+            <li className="border-l border-line pl-6">Private by default</li>
+            <li className="border-l border-line pl-6">
+              Export everything, anytime
+            </li>
+          </ul>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <HeroTree />
+      </section>
+
+      <section className="border-t border-line bg-paper-deep/60">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:grid-cols-3">
+          {[
+            {
+              title: "Deep, not fussy",
+              body: 'Add "c. 1947" or "before Partition" — fuzzy dates and half-known ancestors are welcome. Going deeper should feel like flowing downhill.',
+            },
+            {
+              title: "Private by default",
+              body: "Your tree is yours. Living relatives stay redacted when you share. No ads, no data selling, no model training on your family.",
+            },
+            {
+              title: "No lock-in",
+              body: "GEDCOM and JSON export always work, for every tree, forever. A community tool earns trust — it doesn't ransom your history.",
+            },
+          ].map((f) => (
+            <div key={f.title}>
+              <svg
+                viewBox="0 0 24 24"
+                className="mb-4 h-6 w-6 text-evergreen"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                aria-hidden
+              >
+                <path d="M12 21v-8" />
+                <path d="M12 13c0-3.5 2.5-6 6-6 0 3.5-2.5 6-6 6Z" />
+                <path d="M12 13C12 9.5 9.5 7 6 7c0 3.5 2.5 6 6 6Z" />
+              </svg>
+              <h2 className="font-display text-lg font-semibold text-ink">
+                {f.title}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+                {f.body}
+              </p>
+            </div>
+          ))}
         </div>
-      </main>
+      </section>
+
+      <section className="mx-auto max-w-3xl px-4 py-20 text-center">
+        <p className="font-display text-3xl leading-snug text-ink md:text-4xl">
+          Every family has a story.
+          <span className="text-evergreen"> Keep the link.</span>
+        </p>
+        <Link
+          href="/signup"
+          className="mt-8 inline-block rounded-xl bg-evergreen px-7 py-3 font-medium text-paper shadow-sm transition-colors hover:bg-evergreen-deep"
+        >
+          Start your family tree
+        </Link>
+      </section>
+
+      <footer className="border-t border-line">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-ink-soft">
+          <span>
+            fam.link — a free, open family-memory app. Built for families, not
+            data brokers.
+          </span>
+          <span>The tree is the map. The stories are the territory.</span>
+        </div>
+      </footer>
     </div>
   );
 }
