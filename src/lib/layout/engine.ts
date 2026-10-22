@@ -230,7 +230,6 @@ export function layoutTree(input: LayoutInput): LayoutResult {
       allUnits.push(unit);
     }
   }
-  const unitById = new Map(allUnits.map((u) => [u.id, u] as const));
   for (const unit of allUnits) {
     const r = gen.get(unit.members[0]) as number;
     const list = unitsByRow.get(r) ?? [];
