@@ -3,6 +3,17 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // better-sqlite3 is a native module — keep it out of the bundler
   serverExternalPackages: ["better-sqlite3"],
+  // Tailwind CSS v4 compiler for Turbopack (dev + build). Without this
+  // rule the stylesheet ships raw: @theme unprocessed and zero utility
+  // classes — the page renders unstyled even though the CSS file loads.
+  turbopack: {
+    rules: {
+      "*.css": {
+        loaders: ["@tailwindcss/turbopack"],
+        as: "*.css",
+      },
+    },
+  },
   // allow the ephemeral e2b preview hostnames to reach the dev server
   // (dev-only; production is unaffected)
   allowedDevOrigins: ["**.e2b.app"],

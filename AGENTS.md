@@ -11,6 +11,7 @@ Guidance for AI coding agents working on **fam.link** — a free, open, story-fi
 ## Stack
 
 - Next.js 16 (App Router) + TypeScript + Tailwind CSS v4
+- **Tailwind compiles via the `@tailwindcss/turbopack` loader registered in `next.config.ts` (`turbopack.rules`)** — there is no postcss.config. If that rule is ever removed, styles silently ship uncompiled (raw `@theme`, no utilities) and the build still passes; the only tell is a CSS-parse warning about `@theme` in build logs.
 - SQLite via `better-sqlite3` + Drizzle ORM (production target is Postgres — keep queries portable, no SQLite-only SQL in app code)
 - Auth: custom email + password (scrypt) with **stateless signed sessions** - the cookie carries {uid, email, exp} + HMAC-SHA256 (`SESSION_SECRET` env), no DB row needed to validate (required for serverless: per-instance ephemeral SQLite)
 - Canvas: custom SVG renderer with a bespoke family-tree layout engine (no graph library)
