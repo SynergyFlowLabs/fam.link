@@ -1,11 +1,14 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.js';
+import { LocaleProvider } from './i18n.js';
 import './styles/tokens.css';
 import './styles/app.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <LocaleProvider>
+      <App />
+    </LocaleProvider>
   </StrictMode>,
 );

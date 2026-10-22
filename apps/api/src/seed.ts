@@ -101,6 +101,9 @@ const DEMO_USERS: Array<{ id: string; name: string; email: string; phone: string
   { id: 'user-bilal', name: 'Bilal Khan', email: 'bilal@example.com', phone: '+92 300 0000002' },
   { id: 'user-sadia', name: 'Sadia Khan', email: 'sadia@example.com', phone: '+92 300 0000003' },
   { id: 'user-ahmed', name: 'Ahmed Khan', email: 'ahmed@example.com', phone: '+92 300 0000004' },
+  // Two unclaimed accounts, used to exercise claiming and inviting end-to-end.
+  { id: 'user-nadeem', name: 'Nadeem Khan', email: 'nadeem@example.com', phone: '+92 300 0000005' },
+  { id: 'user-seher', name: 'Seher Khan', email: 'seher@example.com', phone: '+92 300 0000006' },
 ];
 
 /** One claimed person per demo account, so "who am I in this tree?" always has a single answer. */

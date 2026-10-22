@@ -344,6 +344,8 @@ a {
 }
 
 .tree-canvas {
+  /* Chart geometry is not mirrored: coordinates stay in one direction even in RTL locales. */
+  direction: ltr;
   position: relative;
   overscroll-behavior: contain;
   touch-action: none;
@@ -836,6 +838,11 @@ a {
   .calc {
     grid-template-columns: 1fr;
   }
+}
+
+[dir='rtl'] .row,
+[dir='rtl'] .section-title {
+  text-align: right;
 }
 
 @media (prefers-reduced-motion: reduce) {

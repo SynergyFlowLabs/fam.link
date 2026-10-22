@@ -172,7 +172,7 @@ describe('invitations and claiming', () => {
     const counts = before.body.living.length + before.body.deceased.length;
 
     const accepted = await request(app, 'POST', '/api/invite/khan-uncle-nadeem/accept', {
-      body: { userId: 'user-sadia' },
+      body: { userId: 'user-nadeem' },
     });
     expect(accepted.status).toBe(200);
     expect(accepted.body.personId).toBe('person-nadeem');

@@ -162,6 +162,23 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 7 — Prove the loop, and build for RTL from the start ✅
+
+**Goal:** test the product's reason to exist, not just its parts; and stop treating RTL as a later concern.
+
+**Shipped**
+- `apps/api/src/loop.test.ts` — the central loop as a single API-level test: invitation → claim an existing profile (no duplicate person created) → owner corrects a protected field directly → a second relative's competing claim becomes a proposal → the owner rejects it → both values remain on record → the activity log contains claim, update, and rejection.
+- **One human, one profile:** accepting an invitation when you already own a profile in that space now returns 409 with an explanation. This was discovered by writing the loop test, which had accidentally made one account own two people. Duplicate claims are a real integrity failure in a family graph, not an edge case.
+- Accepting an invitation now works for the signed-in user, not only via an explicit demo persona in the request body.
+- `apps/web/src/i18n.tsx` — locale provider with English and Urdu dictionaries, `dir="rtl"` on the document, persisted preference, and a language selector in the top bar. Navigation, shell copy, and tree controls are translated; chart geometry stays LTR because coordinates are not text.
+- Demo dataset gained two unclaimed accounts so claiming can be exercised without overloading an existing persona.
+
+**Verification:** **115 tests passing** (75 domain + 40 API), typecheck clean, web build clean.
+
+**Deviation (honest):** F-9.2 is **partially** met. The shell, navigation, and tree controls are externalised and RTL-correct; screen bodies, dialogs, and email/invite copy are still English-only. Marked partial in §3 below rather than ticked.
+
+---
+
 <!-- NEXT STEPS APPENDED BELOW -->
 
 ---
@@ -237,7 +254,7 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 
 ### E9 — Platform essentials
 - [ ] F-9.1 Audit logging — `MUST`
-- [ ] F-9.2 Internationalisation and RTL — `MUST`
+- [ ] F-9.2 Internationalisation and RTL — `MUST` *(shell, nav and tree controls only; screen bodies pending)*
 - [ ] F-9.3 Notifications — `MUST` *(in-product feed done; delivery and preferences pending)*
 - [ ] F-9.4 Data export — `MUST`
 - [ ] F-9.5 Tree health summary — `COULD`
@@ -257,7 +274,7 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | S4 — Invite it | Invitations, claim flow, onboarding | ✅ |
 | S5 — Share it | Roles, proposals, activity log, disputes | ✅ |
 | S6 — Trust it | Field-level privacy, hidden branches, separation, minors | ✅ |
-| S7 — Harden | Search, duplicates, export, i18n, a11y, tree health | ⬜ |
+| S7 — Harden | Search, duplicates, export, i18n, a11y, tree health | 🟨 i18n partial; tree health pending |
 
 ---
 
@@ -283,3 +300,4 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | 4 | ✅ clean | ✅ 81 passing | ✅ | Onboarding flow exercised end-to-end on a throwaway store |
 | 5 | ✅ clean | ✅ 100 passing | ✅ web build 284 kB (86 kB gzip) | Dispute and revert flows exercised live |
 | 6 | ✅ clean | ✅ 113 passing | ✅ web build 292 kB (88 kB gzip) | Hidden-branch isolation asserted by test |
+| 7 | ✅ clean | ✅ 115 passing | ✅ web build 296 kB (89 kB gzip) | Central loop asserted end-to-end over HTTP |

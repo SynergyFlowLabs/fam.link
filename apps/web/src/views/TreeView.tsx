@@ -9,6 +9,7 @@ import {
 } from '../api.js';
 import { Avatar, Chip, Notice } from '../components/ui.js';
 import { useAsync } from '../hooks.js';
+import { useLocale } from '../i18n.js';
 import { CARD_HEIGHT, CARD_WIDTH, layoutTree } from '../tree/layout.js';
 
 /**
@@ -26,6 +27,7 @@ interface TreeViewProps {
 }
 
 export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect, onAddRelative }: TreeViewProps) {
+  const { t } = useLocale();
   const [depth, setDepth] = useState({ up: 2, down: 2 });
   const tree = useAsync<TreeResponse>(
     () => api.tree(spaceId, focusId, depth.up, depth.down),
@@ -120,7 +122,7 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
               aria-pressed={outline}
               onClick={() => setOutline((value) => !value)}
             >
-              {outline ? 'Show chart' : 'Show outline'}
+              {outline ? t('tree.showChart') : t('tree.showOutline')}
             </button>
             <button
               type="button"
@@ -128,10 +130,10 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
               aria-pressed={!detailed}
               onClick={() => setDetailed((value) => !value)}
             >
-              {detailed ? 'Compact' : 'Detailed'}
+              {detailed ? t('tree.compact') : t('tree.detailed')}
             </button>
             <button type="button" className="btn btn--primary" onClick={() => onAddRelative()}>
-              Add a relative
+              {t('tree.addRelative')}
             </button>
           </div>
         </div>
@@ -153,7 +155,7 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
           <input
             id="tree-search"
             type="search"
-            placeholder="Find in this branch…"
+            placeholder={t('tree.find')}
             value={treeSearch}
             onChange={(event) => setTreeSearch(event.target.value)}
           />

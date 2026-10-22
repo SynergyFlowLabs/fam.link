@@ -1081,10 +1081,13 @@ export function createApp(): express.Express {
       return;
     }
 
-    const { userId } = request.body as { userId?: string };
+    // Accept on behalf of the signed-in user when there is a session; the body is the demo stand-in
+    // for signing in during the same request.
+    const body = (request.body ?? {}) as { userId?: string };
+    const userId = body.userId ?? sessionUser(store, request);
     const user = userId ? userById(store, userId) : undefined;
     if (!user) {
-      response.status(400).json({ error: 'Choose a demo persona to continue.' });
+      response.status(400).json({ error: 'Choose who you are before claiming this profile.' });
       return;
     }
 
@@ -1106,6 +1109,15 @@ export function createApp(): express.Express {
         targetUserId: user.id,
         summary: `${user.name} joined the family space`,
       });
+    }
+
+    // One human, one profile: a member cannot own two people in the same family space.
+    const alreadyOwned = claimedPersonFor(store, invitation.spaceId, user.id);
+    if (invitation.personId && alreadyOwned && alreadyOwned.id !== invitation.personId) {
+      response.status(409).json({
+        error: `You already manage ${displayName(alreadyOwned)} in this family. Ask an administrator to resolve one of the two claims before claiming another profile.`,
+      });
+      return;
     }
 
     // Claim the profile, transferring control of protected fields to the claimant.

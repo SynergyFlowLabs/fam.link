@@ -10,6 +10,7 @@ import {
 import { NotificationBell } from './components/NotificationBell.js';
 import { Dialog, Field, Notice } from './components/ui.js';
 import { useAsync, useRoute } from './hooks.js';
+import { useLocale } from './i18n.js';
 import { ActivityView } from './views/ActivityView.js';
 import { CalculatorView } from './views/CalculatorView.js';
 import { InvitationsView } from './views/InvitationsView.js';
@@ -28,6 +29,7 @@ import { ProfilePanel, TreeView } from './views/TreeView.js';
 
 export default function App() {
   const route = useRoute();
+  const { locale, setLocale, t } = useLocale();
   const session = useAsync(() => api.session(), []);
   const [spaceId, setSpaceId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | undefined>(undefined);
@@ -104,31 +106,29 @@ export default function App() {
     <div className="shell">
       <nav className="rail" aria-label="Main">
         <div className="brand">
-          <span className="brand__name">Fam Link</span>
-          <span className="brand__mark">private</span>
+          <span className="brand__name">{t('app.name', 'Fam Link')}</span>
+          <span className="brand__mark">{t('app.private', 'private')}</span>
         </div>
         {[
-          ['tree', 'Tree'],
-          ['people', 'People'],
-          ['calculator', 'Relationship'],
-          ['invitations', 'Invitations'],
-          ['activity', 'Activity'],
-          ['privacy', 'Privacy'],
-        ].map(([key, label]) => (
+          ['tree', `nav.tree`, 'Tree'],
+          ['people', `nav.people`, 'People'],
+          ['calculator', `nav.calculator`, 'Relationship'],
+          ['invitations', `nav.invitations`, 'Invitations'],
+          ['activity', `nav.activity`, 'Activity'],
+          ['privacy', `nav.privacy`, 'Privacy'],
+        ].map(([key, label, fallback]) => (
           <a
             key={key}
             className="nav-link"
             href={`#/${key}`}
             aria-current={page === key ? 'page' : undefined}
           >
-            {label}
+            {t(label!, fallback)}
           </a>
         ))}
         <div className="rail__foot">
           <p style={{ margin: '0 0 8px' }}>{membership?.space?.name ?? 'Family space'}</p>
-          <p style={{ margin: 0 }}>
-            Everything here is private to this family. Nothing is discoverable from outside.
-          </p>
+          <p style={{ margin: 0 }}>{t('shell.privateNotice')}</p>
         </div>
       </nav>
 
@@ -137,7 +137,7 @@ export default function App() {
           <div className="topbar__title">
             <h1>{membership?.space?.name ?? 'Family space'}</h1>
             <span className="topbar__meta">
-              {membership?.role === 'admin' ? 'Family administrator' : 'Contributor'} ·{' '}
+              {membership?.role === 'admin' ? t('shell.admin', 'Family administrator') : t('shell.contributor', 'Contributor')} ·{' '}
               {session.data.user.name}
             </span>
           </div>
@@ -157,12 +157,23 @@ export default function App() {
                 </option>
               ))}
             </select>
+            <label className="visually-hidden" htmlFor="locale-switch">
+              Language
+            </label>
+            <select
+              id="locale-switch"
+              value={locale}
+              onChange={(event) => setLocale(event.target.value === 'ur' ? 'ur' : 'en')}
+            >
+              <option value="en">English</option>
+              <option value="ur">اردو</option>
+            </select>
             <NotificationBell spaceId={activeSpaceId} onNavigate={(next) => route.navigate(next === 'proposals' ? 'activity' : next)} />
             <button type="button" className="btn btn--quiet" onClick={() => setNewSpaceOpen(true)}>
-              New family
+              {t('shell.newFamily', 'New family')}
             </button>
             <button type="button" className="btn btn--quiet" onClick={() => void api.signOut().then(session.reload)}>
-              Sign out
+              {t('shell.signOut', 'Sign out')}
             </button>
           </div>
         </header>
