@@ -78,10 +78,35 @@ interface Context {
   actor?: Actor;
 }
 
+/**
+ * Demo identity.
+ *
+ * Two mechanisms exist while there is no real authentication:
+ *
+ * 1. the session cookie, which is what a normal browser session uses;
+ * 2. the `x-famlink-persona` header, sent by the client from localStorage.
+ *
+ * The header exists because the app is demonstrated inside an embedded preview iframe, where
+ * `SameSite=Lax` cookies are treated as third-party and dropped — the persona buttons appeared to do
+ * nothing. This is **not authentication**: anyone can claim any demo persona, which is exactly what
+ * the persona switcher already allowed. Real sign-in replaces both; set `FAMLINK_DEMO_IDENTITY=off`
+ * to stop honouring the header once that lands.
+ */
+const DEMO_IDENTITY_HEADER = 'x-famlink-persona';
+
+function demoIdentityEnabled(): boolean {
+  return (process.env['FAMLINK_DEMO_IDENTITY'] ?? 'on').toLowerCase() !== 'off';
+}
+
 function sessionUser(store: Store, request: Request): Id | undefined {
   const cookie = request.cookies?.[SESSION_COOKIE] as string | undefined;
-  if (!cookie) return undefined;
-  return userById(store, cookie) ? cookie : undefined;
+  if (cookie && userById(store, cookie)) return cookie;
+
+  if (demoIdentityEnabled()) {
+    const header = request.get(DEMO_IDENTITY_HEADER);
+    if (header && userById(store, header)) return header;
+  }
+  return undefined;
 }
 
 function buildViewer(

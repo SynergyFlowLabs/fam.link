@@ -114,13 +114,14 @@ No real family data belongs in this repository.
 ```bash
 npm install
 npm run dev        # API on :8787, web on :5173 (proxies /api)
-npm test           # 158 tests
+npm test           # 165 tests
 npm run typecheck
 npm run build      # typecheck + production build of the web client
 ```
 
-Open the web app and pick a demo account. Each persona sees a different amount of the same family,
-because privacy is enforced per field on the server.
+Open the web app — it signs you in automatically and opens the tree as **Ayesha Khan**, the family
+administrator. The **account menu in the top bar** switches to any other member, and each one sees a
+different amount of the same family, because privacy is enforced per field on the server.
 
 | Demo account | Role | What they see |
 |---|---|---|
@@ -171,6 +172,11 @@ Invitations are delivered through a durable outbox with idempotent sends: the me
 before it is attempted, a repeated tap returns the original message rather than a second one, and an
 administrator can see what was sent and when. The transport in this build writes to the server log —
 there is no mail provider connected, and the UI says so rather than claiming a delivery happened.
+
+There is no sign-in yet, and the app does not pretend otherwise: opening it signs you in as a demo
+member, the chosen member is remembered in the browser, and `FAMLINK_DEMO_IDENTITY=off` makes the API
+ignore that client-side identity once real authentication exists. The session cookie alone is not
+enough inside an embedded preview iframe, where `SameSite=Lax` cookies are dropped as third-party.
 
 **Deliberately not built yet** (see `PROGRESS.md` §8): real authentication and a mail/WhatsApp provider,
 memories and voice recordings (Phase 2), notification preferences, full localisation of every

@@ -3,6 +3,38 @@
  * browser code must never address a host directly.
  */
 
+/**
+ * Demo identity, kept in localStorage and sent as a header.
+ *
+ * The session cookie is the real mechanism, but this app is demonstrated inside an embedded preview
+ * iframe, where the browser treats the app's origin as third-party and drops `SameSite=Lax` cookies.
+ * The result was a persona picker where every button appeared to do nothing: the POST set a cookie
+ * the next GET never received.
+ *
+ * So the chosen demo persona is stored on the client and sent on every request. This is explicitly
+ * *not* authentication — the API only honours it while `FAMLINK_DEMO_IDENTITY` is not `off`, and the
+ * README says so. Replacing it with real sign-in means deleting this and the header fallback server-side.
+ */
+const PERSONA_KEY = 'famlink.persona';
+export const DEMO_IDENTITY_HEADER = 'x-famlink-persona';
+
+export function storedPersona(): string | undefined {
+  try {
+    return window.localStorage.getItem(PERSONA_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function storePersona(userId: string | null): void {
+  try {
+    if (userId) window.localStorage.setItem(PERSONA_KEY, userId);
+    else window.localStorage.removeItem(PERSONA_KEY);
+  } catch {
+    // Private browsing may refuse storage; the cookie path still works in a top-level window.
+  }
+}
+
 export interface FamilyDate {
   value: string;
   precision: 'exact' | 'month' | 'year' | 'approximate' | 'unknown';
@@ -166,9 +198,14 @@ export class ApiError extends Error {
 }
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const persona = storedPersona();
   const response = await fetch(path, {
     credentials: 'same-origin',
-    headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(persona ? { [DEMO_IDENTITY_HEADER]: persona } : {}),
+      ...(init.headers ?? {}),
+    },
     ...init,
   });
   const text = await response.text();
@@ -185,8 +222,21 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   session: () => call<SessionResponse>('/api/session'),
-  signIn: (userId: string) => call<{ user: SessionResponse['user'] }>('/api/session', { method: 'POST', body: JSON.stringify({ userId }) }),
-  signOut: () => call<{ ok: true }>('/api/session', { method: 'DELETE' }),
+  signIn: async (userId: string) => {
+    // Store first: the header is what authenticates the very next request in an embedded preview.
+    storePersona(userId);
+    const result = await call<{ user: SessionResponse['user'] }>('/api/session', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    });
+    if (!result.user) storePersona(null);
+    return result;
+  },
+  signOut: async () => {
+    const result = await call<{ ok: true }>('/api/session', { method: 'DELETE' });
+    storePersona(null);
+    return result;
+  },
   createSpace: (name: string) =>
     call<{ space: { id: string; name: string }; personId: string }>('/api/spaces', {
       method: 'POST',

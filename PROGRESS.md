@@ -379,6 +379,34 @@ invitation against the running API and read it back from the outbox.
 
 ---
 
+### Step 18 — Open straight into the app; fix identity in an embedded preview ✅
+
+**The bug.** The persona list's buttons did nothing. The POST to `/api/session` set a `SameSite=Lax`
+cookie, but the app is demonstrated inside an embedded preview iframe, where the browser treats the
+app's origin as third-party and drops that cookie. The follow-up `GET /api/session` therefore came
+back with no user, and the same list re-rendered — a click that looked ignored.
+
+**Shipped**
+- The chosen demo member is stored in `localStorage` and sent as `x-famlink-persona` on every request.
+  The API accepts it as a demo identity (`FAMLINK_DEMO_IDENTITY=off` disables it), so the app works
+  whether or not the browser allows the cookie. The cookie is still tried first, so nothing changes
+  in a normal top-level window.
+- The "Continue as …" list is gone. The app opens directly into the family space as Ayesha Khan (the
+  administrator), remembering a previous choice if there was one and falling back cleanly if that
+  account no longer exists.
+- Signing out now has a real landing state ("You are signed out" with one way back in) instead of
+  dead-ending on the old picker.
+- Seven tests: session without a cookie, permissions identical to the cookie path, switching between
+  requests, unknown persona ignored, cookie preferred when both exist, the off switch, and sign-in
+  confirming the user.
+- README documents the behaviour and states plainly that this is not authentication.
+
+**Verification:** **165 tests passing**, typecheck clean, web build 308 kB (92 kB gzip). Confirmed with
+cookie-less requests through the dev proxy that the header alone yields a session, a tree, and the
+correct per-person privacy projection for a restricted member.
+
+---
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.

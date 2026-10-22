@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   api,
   ApiError,
   displayName,
+  storedPersona,
   type DuplicateCandidate,
   type PersonView,
   type SessionResponse,
@@ -26,6 +27,9 @@ import { ProfilePanel, TreeView } from './views/TreeView.js';
  * The client is deliberately thin. Every permission and privacy decision it renders was already
  * made by the API; when the client hides something, it is a courtesy, not the control.
  */
+
+/** The member the demo opens as. Documented in the README; the account menu switches at any time. */
+const DEMO_DEFAULT_PERSONA = 'user-ayesha';
 
 export default function App() {
   const route = useRoute();
@@ -52,10 +56,69 @@ export default function App() {
     if (membership?.personId && !focusId) setFocusId(membership.personId);
   }, [membership, focusId]);
 
-  const signIn = async (userId: string) => {
-    await api.signIn(userId);
+  const signIn = useCallback(
+    async (userId: string) => {
+      await api.signIn(userId);
+      session.reload();
+    },
+    // `session.reload` is stable; depending on the object would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  /**
+   * The app opens straight into the family space.
+   *
+   * There used to be a "continue as…" persona list, which was a poor front door for a demo and, in
+   * an embedded preview, a broken one: the session cookie was dropped as third-party, so the picker
+   * simply re-rendered. The default identity is now chosen for you, remembered across reloads, and
+   * still switchable from the top bar.
+   */
+  const personas = session.data?.personas ?? [];
+  const defaultPersonaId = useMemo(() => {
+    // Open as the administrator, who can see the whole space; the account menu switches from there.
+    const administrator = personas.find((persona) => persona.id === DEMO_DEFAULT_PERSONA);
+    const anyClaimed = personas.find((persona) => persona.claimed.length > 0);
+    return (administrator ?? anyClaimed ?? personas[0])?.id;
+  }, [personas]);
+
+  const autoSignInTried = useRef(false);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signedOut, setSignedOut] = useState(false);
+
+  useEffect(() => {
+    if (session.loading || !session.data) return;
+    if (session.data.user || signedOut || autoSignInTried.current) return;
+
+    const wanted = storedPersona() ?? defaultPersonaId;
+    if (!wanted) return;
+    autoSignInTried.current = true;
+
+    api
+      .signIn(wanted)
+      .then(() => session.reload())
+      .catch(async (cause: unknown) => {
+        // A remembered persona can disappear (an account is deleted). Fall back once, then explain.
+        if (wanted !== defaultPersonaId && defaultPersonaId) {
+          try {
+            await api.signIn(defaultPersonaId);
+            session.reload();
+            return;
+          } catch {
+            // fall through to the message below
+          }
+        }
+        setSignInError(cause instanceof Error ? cause.message : 'Could not open the demo family.');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.data, session.loading, signedOut, defaultPersonaId]);
+
+  const signOut = useCallback(async () => {
+    await api.signOut();
+    setSignedOut(true);
     session.reload();
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (session.loading && !session.data) {
     return <div className="invite muted">Opening Fam Link…</div>;
@@ -75,7 +138,57 @@ export default function App() {
   }
 
   if (!session.data?.user) {
-    return <PersonaPicker session={session.data} onPick={signIn} />;
+    if (signedOut) {
+      return (
+        <div className="invite">
+          <div className="invite__card">
+            <div className="invite__eyebrow">Fam Link · private family network</div>
+            <p className="invite__quote">You are signed out.</p>
+            <p className="invite__who">
+              This demo has no sign-in of its own — opening the app signs you in as a member of the sample family.
+              You can switch to another member from the account menu once you are in.
+            </p>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => {
+                autoSignInTried.current = false;
+                setSignInError(null);
+                setSignedOut(false);
+              }}
+            >
+              Open the app
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (signInError) {
+      return (
+        <div className="invite">
+          <div className="invite__card">
+            <div className="invite__eyebrow">Fam Link</div>
+            <p className="invite__quote">The demo family could not be opened.</p>
+            <p className="invite__who">{signInError}</p>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => {
+                autoSignInTried.current = false;
+                setSignInError(null);
+                setSignedOut(false);
+                session.reload();
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    // Either the first fetch is still running, or an automatic sign-in is in flight.
+    return <div className="invite muted">Opening Fam Link…</div>;
   }
 
   const activeSpaceId = membership?.spaceId ?? spaceId ?? '';
@@ -93,7 +206,7 @@ export default function App() {
             without an invitation.
           </p>
           <div className="row__actions" style={{ marginTop: 'var(--sp-4)' }}>
-            <button type="button" className="btn" onClick={() => void api.signOut().then(session.reload)}>
+            <button type="button" className="btn" onClick={() => void signOut()}>
               Switch account
             </button>
           </div>
@@ -172,7 +285,14 @@ export default function App() {
             <button type="button" className="btn btn--quiet" onClick={() => setNewSpaceOpen(true)}>
               {t('shell.newFamily', 'New family')}
             </button>
-            <button type="button" className="btn btn--quiet" onClick={() => void api.signOut().then(session.reload)}>
+            <button
+              type="button"
+              className="btn btn--quiet"
+              onClick={() => {
+                void signOut();
+                route.navigate('tree');
+              }}
+            >
               {t('shell.signOut', 'Sign out')}
             </button>
           </div>
@@ -214,7 +334,7 @@ export default function App() {
             <PrivacyView
               spaceId={activeSpaceId}
               personId={membership?.personId}
-              onSignOut={() => void api.signOut().then(session.reload)}
+              onSignOut={() => void signOut()}
             />
           ) : null}
 
@@ -275,49 +395,6 @@ export default function App() {
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-function PersonaPicker({
-  session,
-  onPick,
-}: {
-  session: SessionResponse | null;
-  onPick: (userId: string) => Promise<void>;
-}) {
-  return (
-    <div className="invite">
-      <div className="invite__card">
-        <div className="invite__eyebrow">Fam Link · private family network</div>
-        <p className="invite__quote">Build your family tree together, and keep the stories behind every connection.</p>
-        <p className="invite__who">
-          This is a working demo with a synthetic family. Sign in as a family member to see the tree from their side —
-          each person sees a different amount, because privacy is set per field.
-        </p>
-        <div className="list" style={{ marginTop: 'var(--sp-5)' }}>
-          {(session?.personas ?? []).map((persona) => (
-            <div key={persona.id} className="row">
-              <div className="row__main">
-                <div className="row__title" style={{ fontSize: 'var(--step-0)' }}>
-                  {persona.name}
-                </div>
-                <div className="row__sub">
-                  {persona.claimed.length > 0
-                    ? `claims ${persona.claimed.map((person) => person.name).join(', ')}`
-                    : 'no profile claimed'}
-                </div>
-              </div>
-              <button type="button" className="btn btn--primary small" onClick={() => void onPick(persona.id)}>
-                Continue as {persona.name.split(' ')[0]}
-              </button>
-            </div>
-          ))}
-        </div>
-        <p className="hint" style={{ marginTop: 'var(--sp-4)' }}>
-          Demo identity switching stands in for email or phone sign-in. No real accounts, no real family data.
-        </p>
-      </div>
     </div>
   );
 }
