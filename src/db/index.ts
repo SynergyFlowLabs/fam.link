@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import { MIGRATIONS } from "./migrations";
 import { ensureDemoData } from "./seed";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -87,6 +87,34 @@ sqlite.pragma("foreign_keys = ON");
 
 ensureSchema(sqlite);
 ensureDemoData(sqlite);
+sweepStrayUploadFiles(sqlite);
+
+/**
+ * Safety net: remove files under uploads/ that no media row points at
+ * (left behind by crashes mid-action, or deletions that were interrupted).
+ * Targeted sweeps run after each deletion action — this catches the rest.
+ */
+function sweepStrayUploadFiles(sqlite: Database.Database): void {
+  try {
+    const known = new Set(
+      (
+        sqlite.prepare("SELECT path FROM media").all() as { path: string }[]
+      ).map((r) => r.path),
+    );
+    const dir = path.join(DATA_DIR, "uploads");
+    for (const file of readdirSync(dir)) {
+      if (!known.has(`uploads/${file}`)) {
+        try {
+          unlinkSync(path.join(dir, file));
+        } catch {
+          // already gone / locked — next boot will retry
+        }
+      }
+    }
+  } catch {
+    // uploads dir missing or unreadable — nothing to sweep
+  }
+}
 
 export const db = drizzle(sqlite, { schema });
 export * as tables from "./schema";

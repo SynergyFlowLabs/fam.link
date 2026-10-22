@@ -20,6 +20,7 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 import { ownedTree } from "@/actions/trees";
 import { getTreeAccess } from "@/lib/access";
+import { sweepTreeMedia } from "@/lib/uploads";
 import { canComment, canEdit, type Role } from "@/lib/roles";
 import { OK, fail, type ActionResult } from "@/lib/action-result";
 
@@ -132,9 +133,16 @@ async function parentUnionsOf(childId: string) {
     );
 }
 
-/** The anchor person's unions (where they are a partner), in creation order. */
-async function unionsOfPartner(personId: string) {
-  const rows = await db.select().from(unions);
+/**
+ * The anchor person's unions (where they are a partner), in creation order.
+ * Scoped to the tree — a full scan of every union in the database would slow
+ * down as the number of trees grows.
+ */
+async function unionsOfPartner(treeId: string, personId: string) {
+  const rows = await db
+    .select()
+    .from(unions)
+    .where(eq(unions.treeId, treeId));
   return rows.filter(
     (u) => u.partnerAId === personId || u.partnerBId === personId,
   );
@@ -213,7 +221,7 @@ export async function addRelativeAction(
   } else {
     // child: attach to the anchor's couple union if one exists, else to a
     // single-parent union created for the anchor.
-    const myUnions = await unionsOfPartner(anchorId);
+    const myUnions = await unionsOfPartner(treeId, anchorId);
     let target = myUnions.find((u) => u.partnerBId !== null);
     if (!target) target = myUnions[myUnions.length - 1];
     if (!target) {
@@ -263,7 +271,7 @@ export async function deletePersonAction(formData: FormData): Promise<void> {
   const personId = String(formData.get("personId") ?? "");
   if (!personId) return;
 
-  const myUnions = await unionsOfPartner(personId);
+  const myUnions = await unionsOfPartner(treeId, personId);
   for (const u of myUnions) {
     const survivor =
       u.partnerAId === personId ? u.partnerBId : u.partnerAId ?? null;
@@ -294,6 +302,9 @@ export async function deletePersonAction(formData: FormData): Promise<void> {
       .where(eq(trees.id, treeId));
   }
 
+  // Person deletion cascades their memories — any photo files those
+  // memories owned are now orphans. Sweep them (rows + files).
+  await sweepTreeMedia(treeId);
   await touchTree(treeId);
   revalidateTree(treeId);
   redirect(`/app/trees/${treeId}`);
@@ -409,6 +420,8 @@ export async function deleteMemoryAction(
   }
 
   await db.delete(memories).where(eq(memories.id, memoryId));
+  // The memory's photo (if any) is now unreferenced — remove row + file.
+  await sweepTreeMedia(treeId);
   await touchTree(treeId);
   revalidateTree(treeId, personId || undefined);
   return OK;

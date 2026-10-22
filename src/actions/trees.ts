@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/db";
 import { trees, type Tree } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
+import { collectTreeFilePaths, deleteFiles } from "@/lib/uploads";
 
 /** Every mutation goes through this: the session user must own the tree. */
 export async function ownedTree(
@@ -64,9 +65,12 @@ export async function deleteTreeAction(
   const tree = await ownedTree(treeId, user.id);
   if (!tree) return fail("That tree no longer exists.");
 
-  // FK cascade removes persons, unions, memories, media rows.
-  // (Orphaned files under data/uploads are swept later — tracked in PROGRESS.)
+  // FK cascade removes persons, unions, memories, media rows; the files
+  // under data/uploads live outside the DB, so collect them first and
+  // unlink after (a crash in between is caught by the boot-time sweep).
+  const filePaths = await collectTreeFilePaths(treeId);
   await db.delete(trees).where(eq(trees.id, treeId));
+  await deleteFiles(filePaths);
   revalidatePath("/app");
   return { ok: true, message: tree.name };
 }
