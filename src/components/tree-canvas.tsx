@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { layoutTree, NODE_W, NODE_H, type LayoutResult } from "@/lib/layout/engine";
+import { coupleEdgeD, parentChildEdgeD } from "@/lib/layout/edges";
 import {
   displayName,
   lifeLine,
@@ -12,6 +13,25 @@ import {
 } from "@/lib/canvas-types";
 import { setFocusPersonAction } from "@/actions/persons";
 import { QuickAddModal, type Relation } from "./quick-add-modal";
+
+/** Clamp a view rectangle so it always overlaps the content bounds —
+ *  panning can never push the tree entirely out of sight. */
+function clampViewTo(
+  x: number,
+  y: number,
+  w: number,
+  aspect: number,
+  b: { minX: number; minY: number; maxX: number; maxY: number } | null,
+): View {
+  if (!b) return { x, y, w };
+  const pad = 480;
+  const h = w * aspect;
+  return {
+    x: Math.min(Math.max(x, b.minX - pad - w), b.maxX + pad),
+    y: Math.min(Math.max(y, b.minY - pad - h), b.maxY + pad),
+    w,
+  };
+}
 
 interface View {
   x: number;
@@ -70,6 +90,23 @@ export function TreeCanvas({
     [unions],
   );
 
+  // Content bounds (with generous padding) for pan clamping: dragging can
+  // never push the tree entirely out of sight — the canvas can't go blank.
+  const contentBounds = useMemo(() => {
+    if (layout.nodes.length === 0) return null;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of layout.nodes) {
+      minX = Math.min(minX, n.x - NODE_W / 2);
+      maxX = Math.max(maxX, n.x + NODE_W / 2);
+      minY = Math.min(minY, n.y - NODE_H / 2);
+      maxY = Math.max(maxY, n.y + NODE_H / 2);
+    }
+    return { minX, minY, maxX, maxY };
+  }, [layout]);
+
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [view, setView] = useState<View>(() => ({
@@ -88,6 +125,12 @@ export function TreeCanvas({
   const [modal, setModal] = useState<{ anchorId: string; relation: Relation } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [aspect, setAspect] = useState(0.6);
+
+  const clampView = useCallback(
+    (x: number, y: number, w: number): View =>
+      clampViewTo(x, y, w, aspect, contentBounds),
+    [aspect, contentBounds],
+  );
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -126,29 +169,35 @@ export function TreeCanvas({
     return () => el.removeEventListener("wheel", onWheel);
   }, [aspect, layout.width]);
 
-  // Pan (background drag)
+  // Pan (background drag), 1:1 with the pointer. The viewBox matches the
+  // element's aspect exactly, so one scale (world units per screen pixel)
+  // serves both axes. Panning is clamped to the content so a drag can never
+  // leave the canvas blank.
   const dragRef = useRef<{ px: number; py: number; view: View } | null>(null);
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if ((e.target as Element).closest("[data-node]")) return;
     dragRef.current = { px: e.clientX, py: e.clientY, view };
     setDragging(true);
-    (e.target as Element).setPointerCapture?.(e.pointerId);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const d = dragRef.current;
     const el = svgRef.current;
     if (!d || !el) return;
     const rect = el.getBoundingClientRect();
-    const sx = d.view.w / rect.width;
-    const sy = d.view.w * aspect;
-    setView({
-      ...d.view,
-      x: d.view.x - (e.clientX - d.px) * sx,
-      y: d.view.y - (e.clientY - d.py) * sy,
-    });
+    if (rect.width <= 0) return;
+    const scale = d.view.w / rect.width;
+    setView(
+      clampView(
+        d.view.x - (e.clientX - d.px) * scale,
+        d.view.y - (e.clientY - d.py) * scale,
+        d.view.w,
+      ),
+    );
   };
   const endDrag = () => {
     dragRef.current = null;
+    setDragging(false);
   };
 
   const zoom = (factor: number) => {
@@ -332,31 +381,19 @@ function Edges({
   unionById: Map<string, CanvasUnion>;
 }) {
   return (
-    <g stroke="var(--color-ink-soft)" strokeWidth={1.5} fill="none" opacity={0.5}>
+    <g
+      stroke="var(--color-ink-soft)"
+      strokeWidth={1.5}
+      fill="none"
+      opacity={0.55}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       {unions.map((u) => {
         const a = nodeById.get(u.partnerAId);
         const b = u.partnerBId ? nodeById.get(u.partnerBId) : null;
         if (!a || !b) return null;
-        const left = a.x <= b.x ? a : b;
-        const right = a.x <= b.x ? b : a;
-        if (Math.abs(a.y - b.y) < 1) {
-          return (
-            <line
-              key={`c-${u.id}`}
-              x1={left.x + NODE_W / 2}
-              y1={left.y}
-              x2={right.x - NODE_W / 2}
-              y2={right.y}
-            />
-          );
-        }
-        // spouses in different rows (pedigree collapse edge cases)
-        return (
-          <path
-            key={`c-${u.id}`}
-            d={`M ${left.x + NODE_W / 2} ${left.y} C ${left.x + NODE_W / 2 + 60} ${left.y}, ${right.x - NODE_W / 2 - 60} ${right.y}, ${right.x - NODE_W / 2} ${right.y}`}
-          />
-        );
+        return <path key={`c-${u.id}`} d={coupleEdgeD(a, b, NODE_W)} />;
       })}
       {links.map((l) => {
         const u = unionById.get(l.unionId);
@@ -368,20 +405,20 @@ function Edges({
         let sy: number;
         if (a && b) {
           sx = (a.x + b.x) / 2;
-          sy = a.y + 8;
+          // drop straight off the marriage line — a clean T-junction
+          sy = a.y + 1;
         } else if (a || b) {
-          const p = (a ?? b) as { x: number; y: number };
-          sx = p.x;
-          sy = p.y + NODE_H / 2 + 2;
+          const single = (a ?? b) as { x: number; y: number };
+          sx = single.x;
+          sy = single.y + NODE_H / 2 + 3;
         } else {
           return null;
         }
-        const ty = child.y - NODE_H / 2;
-        const dy = ty - sy;
+        const ty = child.y - NODE_H / 2 - 1;
         return (
           <path
             key={`p-${l.unionId}-${l.childId}`}
-            d={`M ${sx} ${sy} C ${sx} ${sy + dy * 0.5}, ${child.x} ${ty - dy * 0.5}, ${child.x} ${ty}`}
+            d={parentChildEdgeD(sx, sy, child.x, ty)}
           />
         );
       })}
