@@ -32,3 +32,27 @@ npm test        # unit tests for pure logic
 ## Stack
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · SQLite + Drizzle ORM (Postgres-ready) · custom SVG tree canvas.
+
+## Databases
+
+The app runs on **either** database, chosen at boot by environment:
+
+| Mode | How | Use |
+|---|---|---|
+| **SQLite** (default) | no configuration — file at `data/app.db` | local development |
+| **Postgres** | set `DATABASE_URL` (or `POSTGRES_URL` / `POSTGRES_DATABASE_URL`) to a `postgres://…` connection string | **production** — persistent across instances and cold starts |
+| **PGlite** | `FAMLINK_DB=pglite` — embedded Postgres (WASM) at `data/app-pg.db` | zero-setup local verification of the Postgres code path |
+
+On a Postgres URL the app auto-applies its embedded migrations and seeds the
+demo family into a virgin database. The two schemas are kept in lockstep by
+`src/db/schema-parity.test.ts`. Migrations, seeds and queries go through the
+same drizzle surface; `pg` and `@electric-sql/pglite` are only loaded when
+their driver is selected.
+
+On serverless hosting without `DATABASE_URL`, SQLite lives in an ephemeral
+`/tmp` (demo-mode): fine for the demo, not for real data. Provision a hosted
+Postgres (Vercel Storage/Neon, Supabase, any) and point `DATABASE_URL` at it
+— prefer the **pooled** connection endpoint when your provider offers one.
+Note: uploaded photo *files* still use the local filesystem in all modes
+(persistent blob storage is a tracked next step — DB rows survive, files
+re-upload on the next cold start's sweep).
