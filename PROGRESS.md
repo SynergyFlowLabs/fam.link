@@ -271,6 +271,22 @@ so a mistaken merge meant rebuilding a person by hand.
 
 **Verification:** **130 tests passing**, typecheck clean.
 
+### Step 13 — Keyboard navigation for the chart ✅
+
+The chart was usable with a mouse and readable through the outline, but a keyboard user could only
+Tab through cards. Movement now follows the relationships themselves:
+
+- ↑ a parent, ↓ a child, ←/→ a partner when one lies in that direction, otherwise the next card in
+  reading order — so an arrow key never silently does nothing.
+- Shift+Enter re-centres the tree on the focused person; Enter opens their profile.
+- A hint appears the first time a card receives focus, naming the keys.
+- The movement rules live in `apps/web/src/tree/navigate.ts` as a pure function with five tests,
+  because keyboard behaviour that is only tested by hand is keyboard behaviour that breaks.
+
+**Verification:** **135 tests passing**, typecheck clean, web build 300 kB (90 kB gzip).
+
+---
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.
@@ -283,7 +299,7 @@ Ordered by the MVP's actual question — *will relatives collaborate?* — not b
 | 4 | ~~Merge reversal from the merge log~~ | F-8.3 | ✅ Step 10 |
 | 5 | Notification preferences and a real outbox for delivery | F-9.3 | Derived feed works in-product; delivery needs an idempotent outbox (ADR 0004) |
 | 6 | Full localisation of screen bodies, dialogs, invite copy | F-9.2 | Shell and tree are done; the rest is English |
-| 7 | Per-node branch collapse and keyboard-first tree navigation | F-3.3, F-3.4 | Depth controls exist; the chart is not yet fully keyboard-operable |
+| 7 | Per-node branch collapse | F-3.3 | Keyboard navigation shipped in Step 13; collapsing a single branch is still pending |
 | 8 | Cross-space person linking and a space switcher | post-MVP (D-2) | Needed once a user belongs to paternal, maternal and in-law spaces |
 | 9 | ~~Tree health summary (missing dates, detached branches, open disputes)~~ | F-9.5 | ✅ Step 11 |
 | 10 | Phase 2: memories, photographs beyond one per person, voice recordings, timeline | E9 | Only after the loop is proven |

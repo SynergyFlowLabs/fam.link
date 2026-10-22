@@ -11,6 +11,7 @@ import { Avatar, Chip, Notice } from '../components/ui.js';
 import { useAsync } from '../hooks.js';
 import { useLocale } from '../i18n.js';
 import { CARD_HEIGHT, CARD_WIDTH, layoutTree } from '../tree/layout.js';
+import { nextNodeId } from '../tree/navigate.js';
 
 /**
  * The tree view is the product's front door. It renders only the focus window the API sends and
@@ -40,6 +41,8 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
   const [treeSearch, setTreeSearch] = useState('');
   const dragging = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const canvas = useRef<HTMLDivElement>(null);
+  const nodeRefs = useRef(new Map<string, HTMLButtonElement>());
+  const [keyboardHint, setKeyboardHint] = useState(false);
 
   useEffect(() => {
     const element = canvas.current;
@@ -81,6 +84,24 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
   if (tree.loading && !tree.data) return <div className="card muted">Opening the family tree…</div>;
   if (tree.error) return <Notice tone="danger">{tree.error}</Notice>;
   if (!tree.data || !layout) return null;
+
+  const orderedIds = [...layout.nodes.entries()]
+    .sort(([, left], [, right]) => left.y - right.y || left.x - right.x)
+    .map(([id]) => id);
+
+  /** Arrow keys follow relationships; the pure helper keeps the rules testable. */
+  const moveFocus = (fromId: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    const target = nextNodeId({
+      edges: tree.data!.edges,
+      ordered: orderedIds,
+      fromId,
+      direction,
+      present: new Set(tree.data!.nodes.map((node) => node.id)),
+    });
+    if (!target) return;
+    nodeRefs.current.get(target)?.focus();
+    onSelect(target);
+  };
 
   const focusPerson = tree.data.nodes.find((node) => node.id === tree.data!.focusId);
   const selected = tree.data.nodes.find((node) => node.id === selectedPersonId) ?? focusPerson;
@@ -161,6 +182,12 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
           />
         </div>
 
+        {keyboardHint ? (
+          <p className="hint" style={{ margin: '0 0 var(--sp-2)' }} role="status">
+            Arrow keys move between relatives · Shift+Enter re-centres the tree here · Tab walks every card
+          </p>
+        ) : null}
+
         <div
           className="tree-canvas"
           ref={canvas}
@@ -224,6 +251,10 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
                 <button
                   type="button"
                   key={positioned.id}
+                  ref={(element) => {
+                    if (element) nodeRefs.current.set(person.id, element);
+                    else nodeRefs.current.delete(person.id);
+                  }}
                   className={`node${person.id === tree.data!.focusId ? ' node--focus' : ''}${
                     person.livingStatus === 'deceased' ? ' node--deceased' : ''
                   }`}
@@ -240,6 +271,25 @@ export function TreeView({ spaceId, focusId, selectedPersonId, onFocus, onSelect
                   }}
                   onClick={() => onSelect(person.id)}
                   onDoubleClick={() => onFocus(person.id)}
+                  onFocus={() => setKeyboardHint(true)}
+                  onKeyDown={(event) => {
+                    const map = {
+                      ArrowUp: 'up',
+                      ArrowDown: 'down',
+                      ArrowLeft: 'left',
+                      ArrowRight: 'right',
+                    } as const;
+                    const direction = map[event.key as keyof typeof map];
+                    if (direction) {
+                      event.preventDefault();
+                      moveFocus(person.id, direction);
+                      return;
+                    }
+                    if (event.key === 'Enter' && event.shiftKey) {
+                      event.preventDefault();
+                      onFocus(person.id);
+                    }
+                  }}
                   aria-label={`${displayName(person)}, ${person.relationshipToViewer ?? 'relative'}. Select for details.`}
                 >
                   <Avatar name={displayName(person)} gender={person.gender} />

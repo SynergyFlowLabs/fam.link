@@ -1,53 +1,41 @@
-# ADR 0004 — Notifications are derived from state, not stored
+# ADR 0004 — Notifications are derived from state, never stored as their own feed
 
-- **Status:** Accepted
-- **Date:** 2026-10-22
-- **Deciders:** Engineering
+**Status:** accepted · **Date:** 2026-10 · **Deciders:** product and engineering
 
 ## Context
 
-The MVP needs to tell people that a proposed correction needs them, that their invitation was
-accepted, that a relative claimed their profile, and that duplicates need review. The obvious
-implementation is a `notifications` table written by each action.
+A family space has four things that should reach a person without them going looking: a proposal
+waiting for their decision, a claim on a profile they manage, a relative opening an invitation, and
+duplicate profiles that need review. The obvious implementation is a `notifications` table written
+by each of those actions.
 
-That design has two failure modes that matter more here than in most products:
+That design has two failure modes we have already designed around elsewhere:
 
-1. **Drift.** A stored notification can outlive the thing it referred to: a proposal that was
-   resolved, a person who then requested separation, a claim that was reversed. The feed would then
-   tell someone about state that is no longer true.
-2. **Privacy leakage.** A notification is a copy of information. If it is written once and read
-   later, it can be read by someone who is no longer permitted to see the person it describes —
-   including after a hidden branch is created.
+1. **Divergence.** A stored notification can outlive the state that caused it. If a proposal is
+   decided, a claim is reversed, or a person separates, a table copy keeps asserting something that
+   is no longer true.
+2. **Privacy leakage.** Notifications name people. A stored row written when someone was visible can
+   still be delivered after a hidden branch or a visibility change. That is a second privacy
+   implementation, and it will drift from the first.
 
 ## Decision
 
-**Derive notifications on read** from the state that already exists: live proposals, decisions,
-invitation status, claims, memberships, and duplicate candidates. Store only `notificationSeenAt`
-per membership, for the unread count.
+Derive the feed at read time from the state that already exists, using the same visibility
+projection as every other read. `apps/api/src/notifications.ts` is the only writer, and it writes
+nothing.
 
-Consequences that follow from this:
-
-- A notification is produced only if the recipient currently satisfies the same authorisation and
-  visibility checks used elsewhere. There is no second privacy implementation.
-- Derived notifications must have **stable identity and stable time**. The unread count depends on
-  comparing `createdAt` to `seenAt`; a notification stamped `now` on every read can never be marked
-  as read. Duplicate suggestions therefore carry the timestamp of the most recently updated
-  candidate.
-- The feed is bounded (30 items) and sorted by time; it is a "what needs you" list, not a history.
-  History is the activity log, which is append-only and is the record of truth.
+Unread state is a single timestamp per membership (`notificationSeenAt`), updated when the person
+opens the bell. There is no per-item read flag, because the feed is a **status**, not a mailbox.
 
 ## Consequences
 
-**Positive**
-
-- No notification backlog to migrate, backfill, or clean up.
-- Privacy is automatically correct when visibility or hidden branches change.
-- No delivery infrastructure is required to test the behaviour.
-
-**Negative**
-
-- Reading the feed costs a few queries and duplicate scoring; acceptable at MVP scale, and cacheable.
-- There is no delivery channel (email, push) and no per-category preference yet. When delivery is
-  added, it needs a real outbox — the derivation stays, but sending must be idempotent.
-- Some notification kinds cannot exist yet because they would require stored state (for example
-  "your relative added a memory three days ago" outlives the event). Those wait for Phase 2.
+- There is exactly one privacy implementation; a notification cannot name a person the recipient
+  could not otherwise open.
+- No background jobs, no delivery fan-out, no retries, no stale rows to clean up. Recounting is a
+  pure function, so it is cheap to test.
+- Unread counts are approximate by design: opening the bell clears the count, even if one item was
+  never clicked. This is the right trade for a family product; precision here is not worth a schema.
+- Delivery (email, WhatsApp, push) is *not* solved by this ADR. When real delivery arrives it needs a
+  durable outbox with idempotency keys, and this feed becomes the source for its payloads.
+- Anything that genuinely needs history ("you changed this field in March") belongs in the activity
+  log, which is append-only and already authoritative.
