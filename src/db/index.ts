@@ -11,7 +11,6 @@ const SQLITE_PATH = path.join(DATA_DIR, "app.db");
 
 // Singleton across dev-server hot reloads
 declare global {
-  // eslint-disable-next-line no-var
   var __famlinkSqlite: Database.Database | undefined;
 }
 
