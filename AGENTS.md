@@ -12,7 +12,7 @@ Guidance for AI coding agents working on **fam.link** — a free, open, story-fi
 
 - Next.js 16 (App Router) + TypeScript + Tailwind CSS v4
 - SQLite via `better-sqlite3` + Drizzle ORM (production target is Postgres — keep queries portable, no SQLite-only SQL in app code)
-- Auth: custom email + password (scrypt) with DB-backed sessions in httpOnly cookies
+- Auth: custom email + password (scrypt) with **stateless signed sessions** - the cookie carries {uid, email, exp} + HMAC-SHA256 (`SESSION_SECRET` env), no DB row needed to validate (required for serverless: per-instance ephemeral SQLite)
 - Canvas: custom SVG renderer with a bespoke family-tree layout engine (no graph library)
 
 ## Commands
@@ -26,8 +26,10 @@ npm test             # unit tests for pure logic (node --test)
 
 - The database file lives at `data/app.db` and uploads at `data/uploads/` (on Vercel: `/tmp/famlink`, ephemeral) — both are gitignored; never commit them.
 - **Schema changes:** edit `src/db/schema.ts`, run `npx drizzle-kit generate`, then re-embed the generated SQL into `src/db/migrations.ts` (idempotent `IF NOT EXISTS` form). Migrations auto-apply at boot — including on serverless, where a fresh SQLite is created per cold start. `npx drizzle-kit push` still works for quick local iteration; existing databases are baselined automatically.
-- Virgin databases auto-seed the demo account (demo@fam.link / demo1234) so every environment works out of the box.
-- To smoke-test without a browser: `curl -s localhost:3000/<route>` after starting the dev server.
+- Virgin databases auto-seed the demo account (demo@fam.link / demo1234) so every environment works out of the box. Seed IDs are FIXED strings (`demo-user`, `demo-tree`, `demo-p-*`, ...) - never make them random; on serverless each instance re-seeds and URLs must resolve identically everywhere. Reset local demo data with `rm data/app.db` (it re-seeds on next boot).
+- To smoke-test without a browser: `curl -s localhost:3000/<route>` after starting the dev server. Server actions can be POSTed as multipart forms with their `$ACTION_ID_*` hidden field.
+- **Environment variables:** `SESSION_SECRET` (required in production; a stable random string so all instances validate the same cookies). Set in Vercel before deploying.
+- **Share links:** `share_links` table; the token in the URL is the capability. Public share views (`/share/[token]`) render `TreeCanvas` with `readOnly` and pass every person through `redactPerson()` - living relatives appear only as "Living relative" with no dates/places/memories. Media for share views goes through `/api/media/[id]?t=<token>`.
 
 ## Hard rules (product invariants)
 

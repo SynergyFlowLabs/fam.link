@@ -9,8 +9,9 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 
 ## Current status
 
-**Phase:** Phase 1 (MVP) — canvas + quick-add + stories live
-**Working app:** yes — dev preview on :3000, demo login demo@fam.link / demo1234
+**Phase:** Phase 1 (MVP) — canvas, stories, exports, share links live; deployed
+**Working app:** yes — **https://myfamlink.vercel.app** (demo mode), demo login demo@fam.link / demo1234
+**License:** AGPL-3.0-only (`LICENSE`)
 **Last update:** 2026-10-22
 
 ## Phase 0 — Foundations
@@ -36,12 +37,13 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 | 1.5 | Story layer v0: text memories on any person | ✅ |
 | 1.6 | Focus person (re-root the tree), generation stats | ✅ |
 | 1.7 | Photo memories (upload + display on profile) | ✅ |
-| 1.8 | Read-only share links with living-person redaction | ⬜ |
+| 1.8 | Read-only share links with living-person redaction | ✅ |
 | 1.9 | GEDCOM export | ✅ |
 | 1.10 | GEDCOM import (review workflow) | ⬜ |
 | 1.11 | JSON export | ✅ |
 | 1.12 | Invite collaborators with roles | ⬜ |
 | 1.13 | Vercel deployment (auto-migrate, auto-seed, /tmp data dir) | ✅ |
+| 1.14 | Production hardening: stateless sessions + deterministic seed IDs | ✅ |
 
 ## Phase 2 — Story depth
 
@@ -77,3 +79,7 @@ Public deceased profiles, API, family book generation, governance. Not started.
 - **2026-10-22 — Step 1.9 (writer):** GEDCOM 5.5.1 writer as pure function with 8 unit tests (xref resolution, fuzzy dates verbatim, unknown persons, single-parent families, CONT continuations, UTF-8 names, memories → NOTEs).
 - **2026-10-22 — Steps 1.7 + 1.9 (routes) + 1.11:** Photo memories: upload via server action (8 MB cap, image types), stored under `data/uploads/`, served through `/api/media/[id]` with owner-only access (404 otherwise), rendered in the memory feed. GEDCOM + JSON export routes (`/app/trees/[id]/export/{gedcom,json}`) with an Export menu on the canvas header; access-controlled, verified E2E (GEDCOM: 17 records for the demo tree; JSON: full model incl. memories; no-cookie → 404).
 - **2026-10-22 — Step 1.13 (deploy-ready):** Serverless-proofed the app: embedded idempotent migrations applied at boot (fresh SQLite per cold start works), `DATA_DIR` abstraction (`/tmp/famlink` on Vercel), virgin-DB demo auto-seed, media/upload paths via DATA_DIR, `allowedDevOrigins` for the e2b dev preview. Verified with a virgin-database boot: tables + 12-person demo family created automatically. NOTE: the Vercel deployment runs in demo mode (ephemeral storage); persistent Postgres is the documented production path (schema is portable by design).
+- **2026-10-22 — Step 1.13 (deployed):** Vercel project `fam-link` (Hobby, iad1, node 24) Git-linked to SynergyFlowLabs/fam.link (public). First production deployment READY: embedded migrations + virgin-DB auto-seed + /tmp SQLite all verified live (landing + /signin SSR). Custom subdomain assigned in priority order: `famlink.vercel.app` ❌ taken, `fam-link.vercel.app` ❌ taken, **`myfamlink.vercel.app` ✅** (also fam-link-nine.vercel.app).
+- **2026-10-22 — Step 1.14 (production bug fix):** Diagnosed the deployed-site bug from a user screenshot: per-instance ephemeral /tmp SQLite broke DB-stored sessions (sign-in bounced between instances) and random-UUID seed IDs (links 404ed on other instances). Fix: (a) **stateless signed sessions** — cookie carries {uid, email, exp} + HMAC-SHA256 (`SESSION_SECRET`; uid lookup with stable-email fallback), no DB row needed to validate; (b) **deterministic seed IDs** (`demo-user`, `demo-tree`, `demo-p-yusuf`, …) so URLs are instance-independent. Removed redundant `scripts/seed-demo.mjs` (reset = `rm data/app.db`). E2E-verified locally: signin form → 303 + signed cookie → /app; tampered cookie → signed out.
+- **2026-10-22 — Step 1.8 (share links):** Public read-only tree sharing. New `share_links` table (migration 0001, embedded idempotent), `createShareLinkAction`/`revokeShareLinkAction` (ownership-checked; token = 32-char CSPRNG base64url; revocation is instant, rows kept for audit). Share menu on the canvas header (create with label, copy URL, revoke). Public `/share/[token]` page renders the canvas read-only: no node links, no quick-add, no exports, noindex. **Living-person redaction:** living relatives show as "Living relative" with names, dates, places, and memory counts stripped; deceased relatives shown in full; tree structure preserved. `/api/media/[id]` accepts `?t=<token>` for share-view media. E2E-verified: 200/404 paths, zero living-name leaks in HTML, revoke kills the URL, media 404/200 matrix. 5 new unit tests (25 total green).
+- **2026-10-22 — License:** AGPL-3.0-only (`LICENSE`, verbatim from SPDX) + `package.json` license field.

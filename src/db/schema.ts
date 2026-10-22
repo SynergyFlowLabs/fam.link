@@ -198,6 +198,32 @@ export const memories = sqliteTable(
   (t) => [index("memories_person_idx").on(t.personId)],
 );
 
+/**
+ * Share links — read-only public URLs for a tree.
+ *
+ * A token-holder can view the tree at /share/[token] with living persons
+ * redacted. Revoking sets revokedAt (rows are kept for audit).
+ */
+export const shareLinks = sqliteTable(
+  "share_links",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(), // unguessable, in the URL
+    label: text("label"), // e.g. "WhatsApp cousins group"
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [index("share_links_tree_idx").on(t.treeId)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Tree = typeof trees.$inferSelect;
 export type Person = typeof persons.$inferSelect;
@@ -205,3 +231,4 @@ export type Union = typeof unions.$inferSelect;
 export type ParentChild = typeof parentChild.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type Media = typeof media.$inferSelect;
+export type ShareLink = typeof shareLinks.$inferSelect;

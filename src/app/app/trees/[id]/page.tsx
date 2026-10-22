@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { ownedTree } from "@/actions/trees";
 import { TreeCanvas } from "@/components/tree-canvas";
 import { FirstPersonForm } from "@/components/quick-add-modal";
+import { ShareMenu, type ShareLinkView } from "@/components/share-menu";
+import { listShareLinks } from "@/lib/share";
 import type { CanvasLink, CanvasPerson, CanvasUnion } from "@/lib/canvas-types";
 
 export default async function TreeCanvasPage({
@@ -36,6 +38,14 @@ export default async function TreeCanvasPage({
     .where(eq(persons.treeId, treeId))
     .groupBy(memories.personId);
   const memoryCounts = new Map(memoryRows.map((r) => [r.personId, Number(r.c)]));
+  const shareLinkRows = await listShareLinks(treeId);
+  const shareLinkViews: ShareLinkView[] = shareLinkRows.map((l) => ({
+    id: l.id,
+    token: l.token,
+    label: l.label,
+    createdAt: l.createdAt.toISOString(),
+    revoked: l.revokedAt !== null,
+  }));
 
   const canvasPersons: CanvasPerson[] = peopleRows.map((p) => ({
     id: p.id,
@@ -85,6 +95,7 @@ export default async function TreeCanvasPage({
       unions={canvasUnions}
       links={canvasLinks}
       focusPersonId={tree.focusPersonId ?? canvasPersons[0].id}
+      headerExtra={<ShareMenu treeId={treeId} links={shareLinkViews} />}
     />
   );
 }
