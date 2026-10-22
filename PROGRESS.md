@@ -43,6 +43,27 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 1 — Domain: family graph, relationships, privacy, authority ✅
+
+**Goal:** nail the durable logic first. Everything else is a view over this package.
+
+**Shipped** (`packages/domain`, pure TypeScript, zero I/O)
+- `types.ts` — `Person`, `Relationship`, `FamilySpace`, `Membership`, `Proposal`, `ActivityEntry`, `Invitation`, roles, visibility scopes, protected fields. Partial dates as a first-class `FamilyDate`.
+- `dates.ts` — exact/month/year/approximate/unknown dates, ages, life spans, minors. Refuses impossible input instead of guessing.
+- `graph.ts` — indexed graph, cycle-safe ancestor/descendant walks, sibling derivation, unions (a partnership + its children), bounded shortest path.
+- `relationships.ts` — the relationship calculator: path enumeration, basis ranking (blood > adoptive > foster > guardian > step > marriage), sibling/half-sibling/aunt/cousin/removal terms, in-law and step classification, path-aware explanations ("your father's brother's daughter"), equal-distance alternatives, and Urdu kinship terms (paternal/maternal, elder/younger).
+- `privacy.ts` — field-level projection, viewer context, hidden-person gates, separated and blocked people, contact-field lock, `visibilityGate` for traversals.
+- `authority.ts` — precedence ladder, protected-field decisions (`direct` vs `proposal`), proposal and merge authority, separation requests.
+- `duplicates.ts` — weighted, explainable duplicate scoring with relationship overlap dominant; preventive draft detection; field-by-field merge plans.
+- `search.ts` — visibility-aware search over alternative names, transliterations, and phonetic keys.
+- `fixtures.ts` — three synthetic families: the Khan family (PRD worked example), a tangled family (half-siblings, adoption, cousin marriage), and a cyclic family.
+
+**Verification:** `npm test` → **59 passing**; `npm run typecheck` → clean.
+
+**Deviations:** `fullSiblingIds` renamed `siblingIds` because it returns everyone sharing a parent, including half-siblings — the old name would have caused a real bug. Sibling-level authority and privacy are therefore decided by `sharedParentIds` counts, not by the helper name.
+
+---
+
 <!-- NEXT STEPS APPENDED BELOW -->
 
 ---
@@ -86,7 +107,7 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [ ] F-4.6 Invitation management + rate limits — `MUST`
 
 ### E5 — Collaborative editing and governance
-- [ ] F-5.1 Roles and precedence — `MUST`
+- [x] F-5.1 Roles and precedence — `MUST` *(domain; API enforcement pending)*
 - [ ] F-5.2 Propose an edit — `MUST`
 - [ ] F-5.3 Direct edit within authority — `MUST`
 - [ ] F-5.4 Activity log — `MUST`
@@ -95,25 +116,25 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [ ] F-5.7 Comments on proposals — `COULD`
 
 ### E6 — Privacy and visibility
-- [ ] F-6.1 Private by default — `MUST`
-- [ ] F-6.2 Field-level visibility — `MUST`
-- [ ] F-6.3 Hidden branches and blocked users — `MUST`
+- [ ] F-6.1 Private by default — `MUST` *(domain defaults implemented; space creation pending)*
+- [x] F-6.2 Field-level visibility — `MUST` *(domain projection + tests)*
+- [x] F-6.3 Hidden branches and blocked users — `MUST` *(domain gates + tests)*
 - [ ] F-6.4 Separation and removal requests — `MUST`
 - [ ] F-6.5 Minors — `MUST`
 - [ ] F-6.6 Photo permissions — `SHOULD`
 
 ### E7 — Relationship calculator
-- [ ] F-7.1 Relationship between any two people — `MUST`
-- [ ] F-7.2 Path and common ancestor — `MUST`
-- [ ] F-7.3 Plain-language explanation — `MUST`
+- [x] F-7.1 Relationship between any two people — `MUST` *(domain only; UI pending)*
+- [x] F-7.2 Path and common ancestor — `MUST` *(domain only; UI pending)*
+- [x] F-7.3 Plain-language explanation — `MUST` *(domain only; UI pending)*
 - [ ] F-7.4 "How am I related to…" shortcut — `MUST`
 - [ ] F-7.5 Shareable result — `SHOULD`
 - [ ] F-7.6 Locale-aware kinship terminology — `SHOULD`
 
 ### E8 — Search and duplicate prevention
-- [ ] F-8.1 Search people before adding — `MUST`
-- [ ] F-8.2 Duplicate detection — `MUST`
-- [ ] F-8.3 Merge — `MUST`
+- [x] F-8.1 Search people before adding — `MUST` *(domain only; UI pending)*
+- [x] F-8.2 Duplicate detection — `MUST` *(domain only; review queue UI pending)*
+- [ ] F-8.3 Merge — `MUST` *(merge plan exists; API + UI pending)*
 - [ ] F-8.4 People directory — `SHOULD`
 
 ### E9 — Platform essentials
@@ -132,7 +153,7 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 
 | Slice | Contents | Status |
 |---|---|---|
-| S1 — Domain skeleton | Graph model, derivation, relationship calculator, tests | ⬜ |
+| S1 — Domain skeleton | Graph model, derivation, relationship calculator, tests | ✅ |
 | S2 — Persistence + API | Repository, seed family, auth-lite, REST endpoints | ⬜ |
 | S3 — See it | Tree focus view, zoom/pan, expand/collapse, list fallback | ⬜ |
 | S4 — Invite it | Invitations, claim flow, onboarding | ⬜ |
@@ -158,3 +179,4 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | Step | Typecheck | Unit tests | Build | Notes |
 |---|---|---|---|---|
 | 0 | n/a | n/a | n/a | Docs only |
+| 1 | ✅ clean | ✅ 59 passing | n/a | Domain package, no I/O |
