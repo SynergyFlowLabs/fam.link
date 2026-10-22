@@ -132,6 +132,8 @@ export interface Invitation {
   channel: string;
   status: string;
   relationshipLabel?: string;
+  email?: string;
+  phone?: string;
   expiresAt: string;
   person?: PersonView;
   invitedBy?: { name: string };
@@ -291,6 +293,30 @@ export const api = {
     call<{ notifications: Notification[]; unread: number }>(`/api/spaces/${spaceId}/notifications`),
   markNotificationsSeen: (spaceId: string) =>
     call<{ ok: true }>(`/api/spaces/${spaceId}/notifications/seen`, { method: 'POST', body: '{}' }),
+  sendInvitation: (spaceId: string, invitationId: string, channel: 'email' | 'whatsapp', recipient: string) =>
+    call<{
+      duplicated: boolean;
+      message: { id: string; status: string; recipient: string; attempts: number; sentAt?: string; lastError?: string };
+      subject: string;
+      body: string;
+    }>(`/api/spaces/${spaceId}/invitations/${invitationId}/send`, {
+      method: 'POST',
+      body: JSON.stringify({ channel, recipient }),
+    }),
+  outbox: (spaceId: string) =>
+    call<{
+      messages: Array<{
+        id: string;
+        channel: string;
+        recipient: string;
+        subject: string;
+        status: 'queued' | 'sent' | 'failed';
+        attempts: number;
+        createdAt: string;
+        sentAt?: string;
+        lastError?: string;
+      }>;
+    }>(`/api/spaces/${spaceId}/outbox`),
   reports: (spaceId: string) =>
     call<{
       reports: Array<{

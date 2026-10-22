@@ -10,7 +10,7 @@ import type {
   RelationshipKind,
   User,
 } from '@famlink/domain';
-import type { DismissedDuplicate, HiddenBranch, MergeLogEntry, Store } from './db.js';
+import type { DismissedDuplicate, HiddenBranch, MergeLogEntry, OutboxMessage, Store } from './db.js';
 
 /**
  * Demo data: a plausible Khan family across four generations, with the awkward cases the product
@@ -272,6 +272,7 @@ export function seedStore(): Store {
   const hiddenBranches: HiddenBranch[] = [];
   const dismissedDuplicates: DismissedDuplicate[] = [];
   const merges: MergeLogEntry[] = [];
+  const outbox: OutboxMessage[] = [];
 
   return {
     users,
@@ -285,6 +286,7 @@ export function seedStore(): Store {
     hiddenBranches,
     dismissedDuplicates,
     merges,
+    outbox,
     reports: [],
     nextId: 1,
   };

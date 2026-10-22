@@ -58,6 +58,7 @@ import {
   type Store,
 } from './db.js';
 import { NOTIFICATION_CATEGORIES, notificationsFor, unreadCount } from './notifications.js';
+import { deliver, enqueue, invitationCopy } from './outbox.js';
 
 /**
  * HTTP API.
@@ -1938,6 +1939,117 @@ export function createApp(): express.Express {
    * The safety queue. Reports used to be written and never read, which is worse than not offering
    * the button: the person reporting believed someone would see it.
    */
+  // ---------------------------------------------------------------- invitation delivery
+
+  /**
+   * Send an invitation through the outbox. The message is recorded first and sent second, keyed so a
+   * repeated request returns the original message instead of sending twice.
+   */
+  app.post('/api/spaces/:spaceId/invitations/:invitationId/send', async (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor, userId } = ctx as Required<Context>;
+    const invitation = store.invitations.find(
+      (candidate) => candidate.id === request.params.invitationId && candidate.spaceId === spaceId,
+    );
+    if (!invitation || !actor) {
+      response.status(404).json({ error: 'Invitation not found.' });
+      return;
+    }
+    if (invitation.invitedByUserId !== userId && !canManageMembers(actor).allowed) {
+      response.status(403).json({ error: 'Only the person who created this invitation can send it.' });
+      return;
+    }
+    if (invitation.status === 'revoked' || invitation.status === 'accepted' || invitation.status === 'expired') {
+      response.status(409).json({ error: `This invitation is ${invitation.status} and cannot be sent.` });
+      return;
+    }
+
+    const body = request.body as { channel?: 'email' | 'whatsapp'; recipient?: string };
+    const channel = body.channel;
+    if (channel !== 'email' && channel !== 'whatsapp') {
+      response.status(400).json({ error: 'channel must be email or whatsapp.' });
+      return;
+    }
+    const recipient = (body.recipient ?? '').trim();
+    const valid =
+      channel === 'email'
+        ? /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)
+        : /^\+?[0-9][0-9 ()-]{6,}$/.test(recipient);
+    if (!valid) {
+      response.status(400).json({
+        error: channel === 'email' ? 'Enter a valid email address.' : 'Enter a valid phone number including country code.',
+      });
+      return;
+    }
+
+    const space = store.spaces.find((candidate) => candidate.id === spaceId);
+    const person = invitation.personId ? findPerson(store, spaceId, invitation.personId) : undefined;
+    const link = `${request.protocol}://${request.get('host')}/#/invite/${invitation.token}`;
+    const copy = invitationCopy({
+      spaceName: space?.name ?? 'your family',
+      inviterName: userById(store, invitation.invitedByUserId)?.name ?? 'A relative',
+      personName: person ? displayName(person) : undefined,
+      relationshipLabel: invitation.relationshipLabel,
+      link,
+    });
+
+    const { message, duplicated } = enqueue(store, {
+      invitationId: invitation.id,
+      spaceId,
+      channel,
+      recipient,
+      subject: copy.subject,
+      body: copy.body,
+    });
+    const delivered = await deliver(store, message);
+
+    saveStore();
+    response.status(duplicated ? 200 : 202).json({
+      duplicated,
+      message: {
+        id: delivered.id,
+        channel: delivered.channel,
+        recipient: delivered.recipient,
+        status: delivered.status,
+        attempts: delivered.attempts,
+        sentAt: delivered.sentAt,
+        lastError: delivered.lastError,
+      },
+      subject: delivered.subject,
+      body: delivered.body,
+    });
+  });
+
+  /** The outbox, so an administrator can see what was actually sent and what failed. */
+  app.get('/api/spaces/:spaceId/outbox', (request, response) => {
+    const spaceId = request.params.spaceId!;
+    const ctx = context(request, spaceId);
+    if ('error' in ctx) {
+      response.status(ctx.status).json({ error: ctx.error });
+      return;
+    }
+    const { store, actor } = ctx as Required<Context>;
+    if (!actor || !canManageMembers(actor).allowed) {
+      response.status(403).json({ error: 'Only family administrators can see outgoing messages.' });
+      return;
+    }
+    response.json({
+      messages: store.outbox
+        .filter((message) => message.spaceId === spaceId)
+        .slice()
+        .reverse()
+        .map((message) => ({
+          ...message,
+          sentBy: store.invitations.find((invitation) => invitation.id === message.invitationId)?.invitedByUserId,
+        })),
+    });
+  });
+
   app.get('/api/spaces/:spaceId/reports', (request, response) => {
     const spaceId = request.params.spaceId!;
     const ctx = context(request, spaceId);

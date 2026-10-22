@@ -114,7 +114,7 @@ No real family data belongs in this repository.
 ```bash
 npm install
 npm run dev        # API on :8787, web on :5173 (proxies /api)
-npm test           # 135 tests
+npm test           # 158 tests
 npm run typecheck
 npm run build      # typecheck + production build of the web client
 ```
@@ -167,7 +167,12 @@ unreliable (dates that cannot be true, records with no links, disputed values). 
 keyboard-operable: arrow keys move to a parent, child or partner, and the rules behind that are a
 pure, tested module rather than inline DOM logic.
 
-**Deliberately not built yet** (see `PROGRESS.md` §8): real authentication and message delivery,
+Invitations are delivered through a durable outbox with idempotent sends: the message is recorded
+before it is attempted, a repeated tap returns the original message rather than a second one, and an
+administrator can see what was sent and when. The transport in this build writes to the server log —
+there is no mail provider connected, and the UI says so rather than claiming a delivery happened.
+
+**Deliberately not built yet** (see `PROGRESS.md` §8): real authentication and a mail/WhatsApp provider,
 memories and voice recordings (Phase 2), notification preferences, full localisation of every
 screen, per-node branch collapsing, keyboard-first tree navigation, and a cross-space switcher.
 

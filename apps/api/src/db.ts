@@ -69,6 +69,29 @@ export interface MergeLogEntry {
   readonly revertedByUserId?: Id;
 }
 
+/**
+ * Delivery outbox.
+ *
+ * Sending is the part of the invitation loop that leaves the building, so it gets a durable record
+ * before it leaves: one row per (invitation, channel, recipient) with an idempotency key, so a double
+ * tap or a retried request cannot send the same message twice.
+ */
+export interface OutboxMessage {
+  readonly id: Id;
+  readonly spaceId: Id;
+  readonly invitationId: Id;
+  readonly channel: 'email' | 'whatsapp';
+  readonly recipient: string;
+  readonly subject: string;
+  readonly body: string;
+  readonly status: 'queued' | 'sent' | 'failed';
+  readonly attempts: number;
+  readonly idempotencyKey: string;
+  readonly createdAt: string;
+  readonly sentAt?: string;
+  readonly lastError?: string;
+}
+
 export interface Store {
   users: User[];
   spaces: FamilySpace[];
@@ -82,6 +105,7 @@ export interface Store {
   dismissedDuplicates: DismissedDuplicate[];
   reports: Report[];
   merges: MergeLogEntry[];
+  outbox: OutboxMessage[];
   nextId: number;
 }
 
@@ -100,7 +124,7 @@ export function repositoryPath(): string {
  * load keeps a developer's local data usable instead of failing on the first `store.merges.push`.
  */
 function normalizeStore(store: Store): Store {
-  const collections = ['users', 'spaces', 'memberships', 'persons', 'relationships', 'proposals', 'activity', 'invitations', 'hiddenBranches', 'dismissedDuplicates', 'reports', 'merges'] as const;
+  const collections = ['users', 'spaces', 'memberships', 'persons', 'relationships', 'proposals', 'activity', 'invitations', 'hiddenBranches', 'dismissedDuplicates', 'reports', 'merges', 'outbox'] as const;
   for (const key of collections) {
     if (!Array.isArray(store[key])) (store as unknown as Record<string, unknown>)[key] = [];
   }

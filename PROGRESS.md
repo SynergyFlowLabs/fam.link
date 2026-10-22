@@ -352,6 +352,33 @@ read a report against the running API end to end.
 
 ---
 
+### Step 17 — An honest invitation outbox ✅
+
+Invitation links could be created and copied, but nothing was ever *sent*, and the UI implied
+otherwise. This step separates two things that were previously conflated: recording and delivering.
+
+**Shipped**
+- `store.outbox` — one row per (invitation, channel, recipient) with an idempotency key, attempt
+  count, status, and the exact subject and body that were produced. Written **before** any attempt,
+  so a crash between record and send leaves a visible queued message rather than a silent gap.
+- `POST /spaces/:id/invitations/:id/send` validates the address, builds copy that reads from the
+  inviter's side ("Bilal added you to the Khan Family tree and described you as their maternal
+  uncle"), enqueues, attempts delivery, and returns the copy. A repeat request returns the original
+  message with `duplicated: true` instead of sending twice; phone spacing and formatting normalise to
+  the same recipient.
+- `GET /spaces/:id/outbox` for administrators, so "did it send?" has an answer with a timestamp.
+- Invitations screen: a Send panel with channel and recipient, and copy that states plainly that this
+  build has no mail provider connected — the outbox and the copy are real, the transport is a
+  development one that writes the exact message to the server log. Swapping in SMTP or the WhatsApp
+  Cloud API means implementing one `Transport` interface.
+- Six tests: recorded-then-sent, no double send, normalised phone, invalid recipient never queued,
+  sending someone else's or a revoked invitation refused, outbox visible to administrators only.
+
+**Verification:** **158 tests passing**, typecheck clean, web build 308 kB (92 kB gzip). Sent an
+invitation against the running API and read it back from the outbox.
+
+---
+
 ## 7. Remaining work, in priority order
 
 Ordered by the MVP's actual question — *will relatives collaborate?* — not by how interesting the work is.
