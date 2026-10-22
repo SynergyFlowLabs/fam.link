@@ -114,7 +114,7 @@ No real family data belongs in this repository.
 ```bash
 npm install
 npm run dev        # API on :8787, web on :5173 (proxies /api)
-npm test           # 130 tests
+npm test           # 135 tests
 npm run typecheck
 npm run build      # typecheck + production build of the web client
 ```
@@ -163,7 +163,9 @@ account deletion; guided onboarding; English/Urdu shell with RTL.
 
 Duplicates are reviewed with an explanation of *why* each pair was suggested, merges can be undone,
 and the People screen includes a tree-health report of the things that actually make a tree
-unreliable (dates that cannot be true, records with no links, disputed values).
+unreliable (dates that cannot be true, records with no links, disputed values). The chart is
+keyboard-operable: arrow keys move to a parent, child or partner, and the rules behind that are a
+pure, tested module rather than inline DOM logic.
 
 **Deliberately not built yet** (see `PROGRESS.md` §8): real authentication and message delivery,
 memories and voice recordings (Phase 2), notification preferences, full localisation of every
