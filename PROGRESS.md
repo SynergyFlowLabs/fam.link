@@ -64,6 +64,26 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 
 ---
 
+### Step 2 — API, persistence, and seed family ✅
+
+**Goal:** every domain rule enforced at the HTTP boundary, with a demo family rich enough to test collaboration.
+
+**Shipped** (`apps/api`)
+- `db.ts` — JSON-document store behind a repository interface, atomic writes, in-memory override for tests, hidden-branch and dismissed-duplicate records.
+- `seed.ts` — a 20-person, four-generation synthetic Khan family including a second marriage, a half-sibling, an adopted child (with biological parents unrecorded), deceased grandparents, three minors, and a disputed birth date.
+- `app.ts` — sessions (demo persona switcher, httpOnly cookie), spaces, focus-window tree, people search/directory, profile with relationship + permissions, create/patch person, relationships, invitation preview/accept/decline/revoke, proposals, duplicate review/merge/dismiss, activity, export.
+- Privacy and authority are applied by the domain modules on every response; routes never filter fields themselves.
+
+**Verification:** `npm test` → **75 passing** (59 domain + 16 API); `npm run typecheck` clean.
+
+**Deviations and fixes found by the API layer**
+1. **Relationship ranking bug (real, not test-only).** A three-step adoptive path ("your daughter's sister") was beating a four-step blood cousin because only shortest paths were enumerated. Replaced with a tiered search plus a `pathScore = length + basis penalty`, so a two-step adopted sibling beats a six-step blood cousin while a blood cousin still beats an adoptive one at equal distance. Direct partnerships are checked first: your wife is your wife, even though she is also your children's mother.
+2. **Co-parent paths** (`child → parent`) are now classified as partnerships rather than falling through to "relative".
+3. **Proposal `previousValue` leaks.** A proposal on a protected field returned the old value to a member who could not see that field. Responses now strip it unless the actor may view the field.
+4. **Seed claims.** One claimed person per demo account; several people initially shared a claim, which made "who am I in this tree?" ambiguous.
+
+---
+
 <!-- NEXT STEPS APPENDED BELOW -->
 
 ---
@@ -73,16 +93,16 @@ Each step is a self-contained increment that leaves the repo **typechecking, tes
 Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is checked only when the acceptance criteria are demonstrably met in the running app or a passing test.
 
 ### E1 — Account and identity
-- [ ] F-1.1 Authentication (email magic link / phone OTP / social) — `MUST`
+- [ ] F-1.1 Authentication — `MUST` *(demo persona sessions only; real OTP/email delivery pending)*
 - [ ] F-1.2 Personal profile + partial dates — `MUST`
 - [ ] F-1.3 Alternative names — `SHOULD`
 - [ ] F-1.4 Account deletion and export — `MUST`
 
 ### E2 — Family space and tree creation
-- [ ] F-2.1 Create a family space — `MUST`
-- [ ] F-2.2 Add parents, spouses, children, siblings — `MUST`
-- [ ] F-2.3 Relationship types (stored vs derived) — `MUST`
-- [ ] F-2.4 Edit and correct any person — `MUST`
+- [x] F-2.1 Create a family space — `MUST` *(API)*
+- [x] F-2.2 Add parents, spouses, children, siblings — `MUST` *(API)*
+- [x] F-2.3 Relationship types (stored vs derived) — `MUST`
+- [x] F-2.4 Edit and correct any person — `MUST` *(API; history via activity log)*
 - [ ] F-2.5 Partial dates, places, uncertain facts — `MUST`
 - [ ] F-2.6 Guided onboarding — `MUST`
 - [ ] F-2.7 Places lived — `COULD`
@@ -99,18 +119,18 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [ ] F-3.7 Search within the tree — `SHOULD`
 
 ### E4 — Invitations and claiming
-- [ ] F-4.1 Shareable invite link — `MUST`
-- [ ] F-4.2 Email invitation — `MUST`
-- [ ] F-4.3 WhatsApp-friendly invitation — `MUST`
-- [ ] F-4.4 Claim an existing profile — `MUST`
-- [ ] F-4.5 Assign expected relationship at invite time — `MUST`
-- [ ] F-4.6 Invitation management + rate limits — `MUST`
+- [x] F-4.1 Shareable invite link — `MUST` *(API; share UI pending)*
+- [ ] F-4.2 Email invitation — `MUST` *(not sent; copy + link generation only)*
+- [ ] F-4.3 WhatsApp-friendly invitation — `MUST` *(copy generation pending in UI)*
+- [x] F-4.4 Claim an existing profile — `MUST` *(API)*
+- [x] F-4.5 Assign expected relationship at invite time — `MUST` *(API)*
+- [x] F-4.6 Invitation management + rate limits — `MUST` *(API)*
 
 ### E5 — Collaborative editing and governance
 - [x] F-5.1 Roles and precedence — `MUST` *(domain; API enforcement pending)*
-- [ ] F-5.2 Propose an edit — `MUST`
-- [ ] F-5.3 Direct edit within authority — `MUST`
-- [ ] F-5.4 Activity log — `MUST`
+- [x] F-5.2 Propose an edit — `MUST` *(API)*
+- [x] F-5.3 Direct edit within authority — `MUST` *(API)*
+- [x] F-5.4 Activity log — `MUST` *(API)*
 - [ ] F-5.5 Disputed values — `SHOULD`
 - [ ] F-5.6 Revert — `SHOULD`
 - [ ] F-5.7 Comments on proposals — `COULD`
@@ -119,8 +139,8 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [ ] F-6.1 Private by default — `MUST` *(domain defaults implemented; space creation pending)*
 - [x] F-6.2 Field-level visibility — `MUST` *(domain projection + tests)*
 - [x] F-6.3 Hidden branches and blocked users — `MUST` *(domain gates + tests)*
-- [ ] F-6.4 Separation and removal requests — `MUST`
-- [ ] F-6.5 Minors — `MUST`
+- [x] F-6.4 Separation and removal requests — `MUST` *(API)*
+- [x] F-6.5 Minors — `MUST` *(projection + tests)*
 - [ ] F-6.6 Photo permissions — `SHOULD`
 
 ### E7 — Relationship calculator
@@ -135,7 +155,7 @@ Derived from [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §4. A box is chec
 - [x] F-8.1 Search people before adding — `MUST` *(domain only; UI pending)*
 - [x] F-8.2 Duplicate detection — `MUST` *(domain only; review queue UI pending)*
 - [ ] F-8.3 Merge — `MUST` *(merge plan exists; API + UI pending)*
-- [ ] F-8.4 People directory — `SHOULD`
+- [x] F-8.4 People directory — `SHOULD` *(API)*
 
 ### E9 — Platform essentials
 - [ ] F-9.1 Audit logging — `MUST`
@@ -154,7 +174,7 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 | Slice | Contents | Status |
 |---|---|---|
 | S1 — Domain skeleton | Graph model, derivation, relationship calculator, tests | ✅ |
-| S2 — Persistence + API | Repository, seed family, auth-lite, REST endpoints | ⬜ |
+| S2 — Persistence + API | Repository, seed family, auth-lite, REST endpoints | ✅ |
 | S3 — See it | Tree focus view, zoom/pan, expand/collapse, list fallback | ⬜ |
 | S4 — Invite it | Invitations, claim flow, onboarding | ⬜ |
 | S5 — Share it | Roles, proposals, activity log, disputes | ⬜ |
@@ -180,3 +200,4 @@ From [`docs/MVP-FEATURES.md`](./docs/MVP-FEATURES.md) §8, mapped to implementat
 |---|---|---|---|---|
 | 0 | n/a | n/a | n/a | Docs only |
 | 1 | ✅ clean | ✅ 59 passing | n/a | Domain package, no I/O |
+| 2 | ✅ clean | ✅ 75 passing | n/a | API + seed; no web client yet |

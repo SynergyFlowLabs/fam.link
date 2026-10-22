@@ -133,6 +133,7 @@ export function findPaths(
   fromId: Id,
   toId: Id,
   maxDepth = 12,
+  allowedKinds?: readonly RelationshipKind[],
 ): PathCandidate[] {
   if (fromId === toId) return [{ steps: [], basis: 'blood' }];
   if (!index.persons.has(fromId) || !index.persons.has(toId)) return [];
@@ -145,6 +146,7 @@ export function findPaths(
     const next: Id[] = [];
     for (const current of frontier) {
       for (const neighbour of index.neighbours.get(current) ?? []) {
+        if (allowedKinds && !allowedKinds.includes(neighbour.relationship.kind)) continue;
         if (distance.has(neighbour.personId)) continue;
         distance.set(neighbour.personId, depth);
         next.push(neighbour.personId);
@@ -172,6 +174,7 @@ export function findPaths(
     if (currentDistance === undefined || currentDistance >= foundDepth) return;
 
     for (const neighbour of index.neighbours.get(personId) ?? []) {
+      if (allowedKinds && !allowedKinds.includes(neighbour.relationship.kind)) continue;
       if (distance.get(neighbour.personId) !== currentDistance + 1) continue;
       steps.push({
         direction: neighbour.direction ?? 'partner',
@@ -189,7 +192,82 @@ export function findPaths(
   return results;
 }
 
+
+/**
+ * Basis tiers in precedence order (ADR 0001). A blood relationship always wins over a shorter
+ * path through an adoption or a marriage: your cousin is your cousin, not your adopted daughter's
+ * half-sister. Finding paths tier by tier is how that rule becomes true in code.
+ */
+const PATH_TIERS: ReadonlyArray<{ basis: Basis; kinds: readonly RelationshipKind[] }> = [
+  { basis: 'blood', kinds: ['biological-parent'] },
+  { basis: 'adoptive', kinds: ['biological-parent', 'adoptive-parent'] },
+  { basis: 'foster', kinds: ['biological-parent', 'adoptive-parent', 'foster-parent'] },
+  { basis: 'guardian', kinds: ['biological-parent', 'adoptive-parent', 'foster-parent', 'guardian'] },
+  {
+    basis: 'marriage',
+    kinds: ['biological-parent', 'adoptive-parent', 'foster-parent', 'guardian', 'spouse', 'former-spouse', 'partner'],
+  },
+];
+
+/**
+ * Score a path for ranking. Blood is preferred, but only within a step of an equally direct
+ * adoptive path: a two-step adopted sibling must not lose to a six-step blood cousin, while a
+ * four-step blood cousin beats a four-step adoptive one.
+ */
+const BASIS_PENALTY: Readonly<Record<Basis, number>> = {
+  blood: 0,
+  adoptive: 1,
+  foster: 1.5,
+  guardian: 2,
+  step: 2.5,
+  marriage: 2.5,
+};
+
+export function pathScore(path: PathCandidate): number {
+  return path.steps.length + BASIS_PENALTY[path.basis];
+}
+
+export function compareCandidates(left: PathCandidate, right: PathCandidate): number {
+  const scoreDelta = pathScore(left) - pathScore(right);
+  if (scoreDelta !== 0) return scoreDelta;
+  const basisDelta = BASIS_RANK[left.basis] - BASIS_RANK[right.basis];
+  if (basisDelta !== 0) return basisDelta;
+  const lengthDelta = left.steps.length - right.steps.length;
+  if (lengthDelta !== 0) return lengthDelta;
+  return sortKey(left).localeCompare(sortKey(right));
+}
+
+export function findBestPaths(
+  index: GraphIndex,
+  fromId: Id,
+  toId: Id,
+  maxDepth = 12,
+): PathCandidate[] {
+  const collected: PathCandidate[] = [];
+  const seen = new Set<string>();
+  for (const tier of PATH_TIERS) {
+    for (const path of findPaths(index, fromId, toId, maxDepth, tier.kinds)) {
+      const key = sortKey(path);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      collected.push(path);
+    }
+  }
+  return collected.sort(compareCandidates);
+}
+
+function isCoParentPath(steps: readonly KinshipStep[]): boolean {
+  return (
+    steps.length === 2 &&
+    steps[0]?.direction === 'child' &&
+    steps[1]?.direction === 'parent' &&
+    steps[0].toPersonId === steps[1].fromPersonId
+  );
+}
+
 function classifyBasis(steps: readonly KinshipStep[]): Basis {
+  if (isCoParentPath(steps)) return 'marriage';
+
   const partnerIndexes = steps
     .map((step, index) => (step.direction === 'partner' ? index : -1))
     .filter((index) => index >= 0);
@@ -377,6 +455,14 @@ export function classifyPath(
 ): Term {
   if (steps.length === 0) return { termId: 'self', term: 'yourself' };
 
+  // Two people who share a child are co-parents, however the family describes the union.
+  if (isCoParentPath(steps)) {
+    return {
+      termId: 'partner',
+      term: gendered(genderOf(index, targetId), { female: 'partner', male: 'partner', neutral: 'partner' }),
+    };
+  }
+
   const counts = linealCounts(steps);
   if (counts) {
     const lineal = linealTerm(index, counts, targetId);
@@ -548,7 +634,22 @@ export function calculateRelationship(
   options: { allow?: (personId: Id) => boolean; maxDepth?: number } = {},
 ): RelationshipResult {
   const allow = options.allow ?? (() => true);
-  const paths = findPaths(index, fromId, toId, options.maxDepth ?? 12);
+
+  const directPartner = (index.neighbours.get(fromId) ?? []).find(
+    (neighbour) => neighbour.personId === toId && neighbour.direction === 'partner',
+  );
+  const directStep: KinshipStep[] = directPartner
+    ? [
+        {
+          direction: 'partner',
+          relationshipKind: directPartner.relationship.kind,
+          fromPersonId: fromId,
+          toPersonId: toId,
+          relationshipId: directPartner.relationship.id,
+        },
+      ]
+    : [];
+  const paths = directStep.length > 0 ? [{ steps: directStep, basis: 'marriage' as Basis }] : findBestPaths(index, fromId, toId, options.maxDepth ?? 12);
   const visiblePaths = paths.filter((path) =>
     path.steps.every((step) => allow(step.fromPersonId) && allow(step.toPersonId)),
   );
@@ -593,13 +694,12 @@ export function calculateRelationship(
       generationsDown: down,
     }));
 
-  const ranked = [...candidates].sort((left, right) => {
-    const basisDelta = BASIS_RANK[left.basis] - BASIS_RANK[right.basis];
-    if (basisDelta !== 0) return basisDelta;
-    const lengthDelta = left.path.length - right.path.length;
-    if (lengthDelta !== 0) return lengthDelta;
-    return sortKey({ steps: left.path, basis: left.basis }).localeCompare(sortKey({ steps: right.path, basis: right.basis }));
-  });
+  const ranked = [...candidates].sort((left, right) =>
+    compareCandidates(
+      { steps: left.path, basis: left.basis },
+      { steps: right.path, basis: right.basis },
+    ),
+  );
 
   const primary = ranked[0]!;
   const alternatives = ranked
