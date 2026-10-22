@@ -6,7 +6,7 @@ import { memories, parentChild, persons, unions } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ownedTree } from "@/actions/trees";
 import { displayName, lifeLine } from "@/lib/canvas-types";
-import { EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
+import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
 
 export default async function PersonPage({
   params,
@@ -187,6 +187,10 @@ export default async function PersonPage({
             }),
           }))}
         />
+      </div>
+
+      <div className="mt-6">
+        <AddRelativeCard treeId={treeId} personId={person.id} personName={name} />
       </div>
 
       <details className="mt-6 rounded-2xl border border-line bg-card p-5">

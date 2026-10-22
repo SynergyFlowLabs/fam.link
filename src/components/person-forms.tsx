@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { QuickAddModal, type Relation } from "@/components/quick-add-modal";
 import {
   addMemoryAction,
   deleteMemoryAction,
@@ -11,6 +12,64 @@ import type { Person } from "@/db/schema";
 import { useToast } from "@/components/toaster";
 
 const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink-soft";
+
+
+/**
+ * The person page's way to grow the tree — the same quick-add flow as the
+ * canvas pills, reachable without hover (touch-friendly) and with room to
+ * breathe.
+ */
+export function AddRelativeCard({
+  treeId,
+  personId,
+  personName,
+}: {
+  treeId: string;
+  personId: string;
+  personName: string;
+}) {
+  const [relation, setRelation] = useState<Relation | null>(null);
+
+  const options: { relation: Relation; label: string; hint: string }[] = [
+    { relation: "father", label: "Father", hint: "or a step/adoptive parent" },
+    { relation: "mother", label: "Mother", hint: "or a second parent" },
+    { relation: "spouse", label: "Spouse or partner", hint: "" },
+    { relation: "child", label: "Child", hint: "single parents welcome" },
+  ];
+
+  return (
+    <section className="rounded-2xl border border-line bg-card p-5">
+      <h2 className="font-display text-lg font-semibold text-ink">
+        Add a relative
+      </h2>
+      <p className="mt-1 text-xs text-ink-soft">
+        Grow the tree from {personName} — half-known is welcome, blanks are fine.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {options.map((o) => (
+          <button
+            key={o.relation}
+            type="button"
+            onClick={() => setRelation(o.relation)}
+            className="flex h-9 items-center gap-1.5 rounded-full border border-evergreen/50 bg-paper px-3.5 text-xs font-medium text-evergreen transition-colors hover:bg-evergreen hover:text-paper"
+          >
+            <span aria-hidden>+</span>
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {relation && (
+        <QuickAddModal
+          treeId={treeId}
+          anchorId={personId}
+          anchorName={personName}
+          relation={relation}
+          onClose={() => setRelation(null)}
+        />
+      )}
+    </section>
+  );
+}
 
 export function EditPersonForm({
   treeId,
