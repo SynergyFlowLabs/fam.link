@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { addFirstPersonAction, addRelativeAction } from "@/actions/persons";
+import { useToast } from "@/components/toaster";
 
 export type Relation = "father" | "mother" | "spouse" | "child";
 
@@ -103,6 +104,7 @@ export function QuickAddModal({
   onClose: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const toast = useToast();
   const defaultGender = relation === "father" ? "m" : relation === "mother" ? "f" : undefined;
 
   return (
@@ -126,8 +128,17 @@ export function QuickAddModal({
         <form
           action={(fd: FormData) => {
             startTransition(async () => {
-              await addRelativeAction(fd);
-              onClose();
+              try {
+                const res = await addRelativeAction(fd);
+                if (res.ok) {
+                  toast.success(`${res.message ?? "Someone"} added to the tree`);
+                  onClose();
+                } else {
+                  toast.error(res.error ?? "Couldn't add them — please try again.");
+                }
+              } catch {
+                toast.error("Something went wrong — please try again.");
+              }
             });
           }}
           className="flex flex-col gap-3.5"
@@ -156,11 +167,18 @@ export function QuickAddModal({
 
 export function FirstPersonForm({ treeId }: { treeId: string }) {
   const [pending, startTransition] = useTransition();
+  const toast = useToast();
   return (
     <form
       action={(fd: FormData) => {
         startTransition(async () => {
-          await addFirstPersonAction(fd);
+          try {
+            const res = await addFirstPersonAction(fd);
+            if (res.ok) toast.success(`${res.message ?? "Someone"} added to the tree`);
+            else toast.error(res.error ?? "Couldn't add them — please try again.");
+          } catch {
+            toast.error("Something went wrong — please try again.");
+          }
         });
       }}
       className="mt-4 flex flex-col gap-3.5"

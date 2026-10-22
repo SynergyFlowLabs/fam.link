@@ -183,6 +183,11 @@ body {
   .dialog-backdrop {
     animation: backdrop-enter 0.18s ease-out;
   }
+
+  /* Toasts arrive the same way the dialog does — a quiet rise, then still. */
+  .toast-enter {
+    animation: toast-enter 0.18s cubic-bezier(0.2, 0.9, 0.4, 1);
+  }
 }
 
 @keyframes tree-draw-line {
@@ -204,6 +209,12 @@ body {
 @keyframes backdrop-enter {
   from {
     opacity: 0;
+  }
+}
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
   }
 }
 

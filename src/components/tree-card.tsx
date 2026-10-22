@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useTransition } from "react";
 import { deleteTreeAction, renameTreeAction } from "@/actions/trees";
+import { useToast } from "@/components/toaster";
 
 export function TreeCard({
   id,
@@ -14,6 +16,34 @@ export function TreeCard({
   people: number;
   updated: string;
 }) {
+  const toast = useToast();
+  const [renaming, startRename] = useTransition();
+  const [deleting, startDelete] = useTransition();
+
+  const rename = (fd: FormData) => {
+    startRename(async () => {
+      try {
+        const res = await renameTreeAction(fd);
+        if (res.ok) toast.success(`Renamed to “${res.message}”`);
+        else toast.error(res.error ?? "Couldn't rename the tree — try again.");
+      } catch {
+        toast.error("Something went wrong — please try again.");
+      }
+    });
+  };
+
+  const remove = (fd: FormData) => {
+    startDelete(async () => {
+      try {
+        const res = await deleteTreeAction(fd);
+        if (res.ok) toast.info(`“${res.message}” deleted`);
+        else toast.error(res.error ?? "Couldn't delete the tree — try again.");
+      } catch {
+        toast.error("Something went wrong — please try again.");
+      }
+    });
+  };
+
   return (
     <div className="group relative rounded-2xl border border-line bg-card p-5 transition-colors hover:border-evergreen/60">
       <Link href={`/app/trees/${id}`} className="flex items-start gap-4">
@@ -56,7 +86,7 @@ export function TreeCard({
           ⋯
         </summary>
         <div className="shadow-float absolute right-0 top-9 z-10 w-48 rounded-xl border border-line bg-card p-3">
-          <form action={renameTreeAction} className="flex flex-col gap-2">
+          <form action={rename} className="flex flex-col gap-2">
             <input type="hidden" name="treeId" value={id} />
             <input
               name="name"
@@ -69,13 +99,14 @@ export function TreeCard({
             />
             <button
               type="submit"
-              className="btn-secondary py-1.5 text-sm"
+              disabled={renaming}
+              className="btn-secondary py-1.5 text-sm disabled:opacity-60"
             >
-              Rename
+              {renaming ? "Renaming…" : "Rename"}
             </button>
           </form>
           <form
-            action={deleteTreeAction}
+            action={remove}
             onSubmit={(e) => {
               if (
                 !confirm(
@@ -89,9 +120,10 @@ export function TreeCard({
             <input type="hidden" name="treeId" value={id} />
             <button
               type="submit"
-              className="w-full rounded-lg px-2.5 py-1.5 text-left text-sm text-rosewood transition-colors hover:bg-rosewood-mist"
+              disabled={deleting}
+              className="w-full rounded-lg px-2.5 py-1.5 text-left text-sm text-rosewood transition-colors hover:bg-rosewood-mist disabled:opacity-60"
             >
-              Delete tree…
+              {deleting ? "Deleting…" : "Delete tree…"}
             </button>
           </form>
         </div>

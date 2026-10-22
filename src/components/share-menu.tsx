@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useTransition } from "react";
 import {
   createShareLinkAction,
   revokeShareLinkAction,
 } from "@/actions/share";
+import { useToast } from "@/components/toaster";
 
 export interface ShareLinkView {
   id: string;
@@ -19,18 +20,52 @@ export interface ShareLinkView {
  * revoke them. Lives next to Export in the canvas header.
  */
 export function ShareMenu({ treeId, links }: { treeId: string; links: ShareLinkView[] }) {
-  const [copied, setCopied] = useState<string | null>(null);
+  const toast = useToast();
+  const [pending, startTransition] = useTransition();
+  const [revoking, startRevoking] = useTransition();
   const active = links.filter((l) => !l.revoked);
   const revoked = links.filter((l) => l.revoked);
 
   const copy = async (token: string) => {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}/share/${token}`);
-      setCopied(token);
-      setTimeout(() => setCopied(null), 2000);
+      toast.success("Share link copied to clipboard");
     } catch {
-      // clipboard blocked — the URL is still selectable text
+      toast.info("Couldn't copy automatically", "Select the link text below and copy it by hand.");
     }
+  };
+
+  const create = (fd: FormData) => {
+    startTransition(async () => {
+      try {
+        const res = await createShareLinkAction(fd);
+        if (!res.ok) {
+          toast.error(res.error ?? "Couldn't create the link — try again.");
+          return;
+        }
+        // Copy the fresh link straight to the clipboard — one fewer step.
+        try {
+          await navigator.clipboard.writeText(`${window.location.origin}/share/${res.token}`);
+          toast.success("Share link created", "Already copied to your clipboard.");
+        } catch {
+          toast.success("Share link created", "Copy it from the list below.");
+        }
+      } catch {
+        toast.error("Something went wrong — please try again.");
+      }
+    });
+  };
+
+  const revoke = (fd: FormData) => {
+    startRevoking(async () => {
+      try {
+        const res = await revokeShareLinkAction(fd);
+        if (res.ok) toast.info("Link revoked", "Its URL stops working immediately.");
+        else toast.error(res.error ?? "Couldn't revoke the link — try again.");
+      } catch {
+        toast.error("Something went wrong — please try again.");
+      }
+    });
   };
 
   return (
@@ -50,7 +85,7 @@ export function ShareMenu({ treeId, links }: { treeId: string; links: ShareLinkV
           dates or stories.
         </p>
 
-        <form action={createShareLinkAction} className="mt-2.5 flex gap-1.5">
+        <form action={create} className="mt-2.5 flex gap-1.5">
           <input type="hidden" name="treeId" value={treeId} />
           <input
             type="text"
@@ -61,9 +96,10 @@ export function ShareMenu({ treeId, links }: { treeId: string; links: ShareLinkV
           />
           <button
             type="submit"
-            className="shrink-0 rounded-lg bg-evergreen px-3 py-1.5 text-xs font-medium text-paper transition-colors hover:opacity-90"
+            disabled={pending}
+            className="shrink-0 rounded-lg bg-evergreen px-3 py-1.5 text-xs font-medium text-paper transition-colors hover:opacity-90 disabled:opacity-60"
           >
-            Create
+            {pending ? "Creating…" : "Create"}
           </button>
         </form>
 
@@ -88,17 +124,18 @@ export function ShareMenu({ treeId, links }: { treeId: string; links: ShareLinkV
                     onClick={() => copy(l.token)}
                     className="shrink-0 rounded-lg border border-line px-2 py-1 text-[10px] text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
                   >
-                    {copied === l.token ? "Copied!" : "Copy"}
+                    Copy
                   </button>
                 </div>
-                <form action={revokeShareLinkAction} className="mt-1.5">
+                <form action={revoke} className="mt-1.5">
                   <input type="hidden" name="treeId" value={treeId} />
                   <input type="hidden" name="linkId" value={l.id} />
                   <button
                     type="submit"
-                    className="text-[10px] text-rosewood/80 underline-offset-2 transition-colors hover:text-rosewood hover:underline"
+                    disabled={revoking}
+                    className="text-[10px] text-rosewood/80 underline-offset-2 transition-colors hover:text-rosewood hover:underline disabled:opacity-60"
                   >
-                    Revoke this link
+                    {revoking ? "Revoking…" : "Revoke this link"}
                   </button>
                 </form>
               </li>

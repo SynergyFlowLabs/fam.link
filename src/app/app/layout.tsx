@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { Logo } from "@/components/logo";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ToastProvider } from "@/components/toaster";
 
 export default async function AppLayout({
   children,
@@ -50,7 +51,9 @@ export default async function AppLayout({
           </div>
         </div>
       </header>
-      <main>{children}</main>
+      <main>
+        <ToastProvider>{children}</ToastProvider>
+      </main>
     </div>
   );
 }
