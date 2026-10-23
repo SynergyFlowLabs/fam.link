@@ -24,6 +24,9 @@ import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } fr
 import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/labels-fields";
 import { PersonTimelineSection } from "@/components/person-events";
 import { SourcesSection } from "@/components/sources-section";
+import { StoryPromptsSection, type PromptItem } from "@/components/story-prompts";
+import { pickStoryPrompts } from "@/lib/story-prompts";
+import { listPromptsForTree } from "@/actions/prompts";
 import type { SourceRef } from "@/components/source-picker";
 import { AskRelativesSection, type AskLinkItem } from "@/components/ask-relatives";
 import { askLinks } from "@/db/schema";
@@ -225,6 +228,21 @@ export default async function PersonPage({
     if (ref) (sourcesByEvent[r.eventId] ??= []).push(ref);
   }
 
+  // Story prompts (issue #38): tree customs + curated globals, picked for
+  // this person and stable for the day.
+  const promptRows = canComment(role) || canEdit(role) ? await listPromptsForTree(treeId) : [];
+  const promptItems: PromptItem[] = promptRows.map((r) => ({
+    id: r.id,
+    prompt: r.prompt,
+    category: r.category,
+    treeId: r.treeId,
+  }));
+  const pickedPrompts = pickStoryPrompts(promptItems, {
+    relation: null,
+    count: 3,
+    seedMs: Math.floor(Date.now() / 86_400_000) * 86_400_000,
+  });
+
   const mentionMembers = await listMentionableMembers(treeId);
   const memberLinks = Object.fromEntries(
     mentionMembers
@@ -406,6 +424,19 @@ export default async function PersonPage({
           allSources={allSourceRefs}
         />
       </div>
+
+      {pickedPrompts.length > 0 ? (
+        <div className="mt-6">
+          <StoryPromptsSection
+            treeId={treeId}
+            personId={personId}
+            personName={name}
+            prompts={pickedPrompts}
+            canEdit={canEdit(role)}
+            canComment={canComment(role)}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <SourcesSection

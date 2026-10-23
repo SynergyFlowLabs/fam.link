@@ -5,8 +5,8 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema";
 import { MIGRATIONS } from "./migrations";
 import { PG_MIGRATIONS } from "./migrations-pg";
-import { ensureDemoData } from "./seed";
-import { ensureDemoDataPg, type PgAppDb } from "./seed-pg";
+import { ensureDemoData, ensureStoryPrompts } from "./seed";
+import { ensureDemoDataPg, ensureStoryPromptsPg, type PgAppDb } from "./seed-pg";
 import * as pgSchema from "./schema-pg";
 
 /**
@@ -148,6 +148,7 @@ function makeSqliteDb() {
 
   ensureSchema(sqlite);
   ensureDemoData(sqlite);
+  ensureStoryPrompts(sqlite);
   sweepStrayUploadFiles(sqlite);
 
   return drizzle(sqlite, { schema });
@@ -210,6 +211,7 @@ async function initPglite(): Promise<PgAppDb> {
   await applyPgMigrations(runner);
   const d = drizzle(client, { schema: pgSchema }) as unknown as PgAppDb;
   await ensureDemoDataPg(d);
+  await ensureStoryPromptsPg(d);
   await bootSweepUploadsPg(d);
   return d;
 }
@@ -235,6 +237,7 @@ async function initPostgres(url: string): Promise<PgAppDb> {
   const { drizzle } = await import("drizzle-orm/node-postgres");
   const d = drizzle(pool, { schema: pgSchema }) as unknown as PgAppDb;
   await ensureDemoDataPg(d);
+  await ensureStoryPromptsPg(d);
   await bootSweepUploadsPg(d);
   return d;
 }
