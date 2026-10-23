@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { count, eq } from "drizzle-orm";
+import { getPersonCustomValuesByTree, getPersonLabelsByTree, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
 import { db } from "@/db";
 import { memories, parentChild, persons, trees, unions } from "@/db/schema";
 import { getShareLinkByToken } from "@/lib/share";
@@ -71,9 +72,15 @@ export default async function SharedTreePage({
     .where(eq(persons.treeId, link.treeId))
     .groupBy(memories.personId);
   const memoryCounts = new Map(memoryRows.map((r) => [r.personId, Number(r.c)]));
+  const labelDefs = await listLabelDefs(link.treeId);
+  const fieldDefs = await listCustomFieldDefs(link.treeId);
+  const labelsByPerson = await getPersonLabelsByTree(link.treeId);
+  const customByPerson = await getPersonCustomValuesByTree(link.treeId);
 
-  const canvasPersons: CanvasPerson[] = peopleRows.map((p) =>
-    redactPerson({
+  const canvasPersons: CanvasPerson[] = peopleRows.map((p) => {
+    const lbs = labelsByPerson.get(p.id) ?? [];
+    const cvs = customByPerson.get(p.id) ?? [];
+    return redactPerson({
       id: p.id,
       firstName: p.firstName,
       lastName: p.lastName,
@@ -85,8 +92,10 @@ export default async function SharedTreePage({
       deathDateText: p.deathDateText,
       deathPlace: p.deathPlace,
       memoryCount: memoryCounts.get(p.id) ?? 0,
-    }),
-  );
+      labels: lbs.map((l) => ({ id: l.id, name: l.name, color: l.color })),
+      customFields: cvs.map((c) => ({ fieldId: c.fieldId, fieldName: c.fieldName, kind: c.kind as never, value: c.value })),
+    });
+  });
   const canvasUnions: CanvasUnion[] = unionRows.map((u) => ({
     id: u.id,
     partnerAId: u.partnerAId,
@@ -106,6 +115,8 @@ export default async function SharedTreePage({
       links={canvasLinks}
       focusPersonId={tree.focusPersonId ?? canvasPersons[0].id}
       readOnly
+      labelDefs={labelDefs.map((l) => ({ id: l.id, name: l.name, color: l.color }))}
+      fieldDefs={fieldDefs.map((f) => ({ id: f.id, name: f.name, kind: f.kind as never, optionsJson: f.optionsJson }))}
       shareNote="Shared read-only view — living relatives are kept private. Built with fam.link."
     />
   );

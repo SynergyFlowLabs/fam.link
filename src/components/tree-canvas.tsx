@@ -18,6 +18,7 @@ import {
   type CanvasPerson,
   type CanvasUnion,
 } from "@/lib/canvas-types";
+import { labelColorFor } from "@/lib/labels";
 import { setFocusPersonAction } from "@/actions/persons";
 import { QuickAddModal, type Relation } from "./quick-add-modal";
 
@@ -76,6 +77,10 @@ interface Props {
    * never link — their person pages are private.
    */
   personHrefBase?: string | null;
+  /** Labels defined in this tree (for filtering). */
+  labelDefs?: { id: string; name: string; color: string | null }[];
+  /** Custom field defs in this tree (for filtering). */
+  fieldDefs?: { id: string; name: string; kind: "text"|"number"|"date"|"select"; optionsJson: string | null }[];
 }
 
 const MIN_W = 360;
@@ -95,6 +100,8 @@ export function TreeCanvas({
   headerExtra = null,
   importHref = null,
   personHrefBase = null,
+  labelDefs = [],
+  fieldDefs = [],
 }: Props) {
   const editable = canEdit ?? !readOnly;
   const exportsOn = showExport ?? !readOnly;
@@ -331,6 +338,38 @@ export function TreeCanvas({
   const totalMemories = persons.reduce((s, p) => s + p.memoryCount, 0);
   const focusPerson = personById.get(focusPersonId);
 
+  // ----- filters (labels + custom fields) -----
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const [fieldFilter, setFieldFilter] = useState<string | null>(null);
+  const [fieldQuery, setFieldQuery] = useState<string>("");
+
+  const filteredCount = useMemo(() => {
+    if (!labelFilter && !fieldFilter) return null;
+    return persons.filter((p) => {
+      if (labelFilter) {
+        const has = (p.labels ?? []).some((l) => l.name.toLowerCase() === labelFilter.toLowerCase());
+        // __unlabeled special
+        if (labelFilter === "__unlabeled") {
+          if ((p.labels ?? []).length !== 0) return false;
+        } else if (!has) return false;
+      }
+      if (fieldFilter) {
+        const vals = p.customFields ?? [];
+        const fieldName = fieldDefs.find((f) => f.id === fieldFilter)?.name ?? fieldFilter;
+        const wanted = fieldQuery.trim().toLowerCase();
+        if (wanted) {
+          const match = vals.some((v) => v.fieldName.toLowerCase() === fieldName.toLowerCase() && v.value.toLowerCase().includes(wanted));
+          if (!match) return false;
+        } else {
+          const hasField = vals.some((v) => v.fieldId === fieldFilter || v.fieldName.toLowerCase() === fieldName.toLowerCase());
+          if (!hasField) return false;
+        }
+      }
+      return true;
+    }).length;
+  }, [persons, labelFilter, fieldFilter, fieldQuery, fieldDefs]);
+
+
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col">
       {readOnly && shareNote && (
@@ -368,6 +407,20 @@ export function TreeCanvas({
             >
               Import
             </a>
+          )}
+          {(labelDefs.length > 0 || fieldDefs.length > 0) && (
+            <CanvasFilter
+              labelDefs={labelDefs}
+              fieldDefs={fieldDefs}
+              labelFilter={labelFilter}
+              onLabelFilter={setLabelFilter}
+              fieldFilter={fieldFilter}
+              fieldQuery={fieldQuery}
+              onFieldFilter={setFieldFilter}
+              onFieldQuery={setFieldQuery}
+              filteredCount={filteredCount}
+              totalCount={persons.length}
+            />
           )}
           {exportsOn && (
           <details className="relative">
@@ -490,6 +543,32 @@ export function TreeCanvas({
           {layout.nodes.map((n) => {
             const p = personById.get(n.id);
             if (!p) return null;
+            const isFiltered =
+              labelFilter || fieldFilter
+                ? (() => {
+                    if (labelFilter) {
+                      if (labelFilter === "__unlabeled") {
+                        if ((p.labels ?? []).length !== 0) return false;
+                      } else {
+                        const has = (p.labels ?? []).some((l) => l.name.toLowerCase() === labelFilter.toLowerCase());
+                        if (!has) return false;
+                      }
+                    }
+                    if (fieldFilter) {
+                      const fieldName = fieldDefs.find((f) => f.id === fieldFilter)?.name ?? "";
+                      const vals = p.customFields ?? [];
+                      if (fieldQuery.trim()) {
+                        const q = fieldQuery.trim().toLowerCase();
+                        const match = vals.some((v) => (v.fieldId === fieldFilter || v.fieldName.toLowerCase() === fieldName.toLowerCase()) && v.value.toLowerCase().includes(q));
+                        if (!match) return false;
+                      } else {
+                        const hasField = vals.some((v) => v.fieldId === fieldFilter || v.fieldName.toLowerCase() === fieldName.toLowerCase());
+                        if (!hasField) return false;
+                      }
+                    }
+                    return true;
+                  })()
+                : true;
             return (
               <PersonNode
                 key={n.id}
@@ -505,6 +584,7 @@ export function TreeCanvas({
                 canEdit={editable}
                 onHover={setHoverId}
                 onQuickAdd={(relation) => setModal({ anchorId: n.id, relation })}
+                dimmed={!isFiltered}
               />
             );
           })}
@@ -582,6 +662,93 @@ function Edges({
 }
 
 /** Find-someone search: type a name, jump to the person. */
+function CanvasFilter({
+  labelDefs,
+  fieldDefs,
+  labelFilter,
+  onLabelFilter,
+  fieldFilter,
+  fieldQuery,
+  onFieldFilter,
+  onFieldQuery,
+  filteredCount,
+  totalCount,
+}: {
+  labelDefs: { id: string; name: string; color: string | null }[];
+  fieldDefs: { id: string; name: string; kind: string; optionsJson: string | null }[];
+  labelFilter: string | null;
+  onLabelFilter: (v: string | null) => void;
+  fieldFilter: string | null;
+  fieldQuery: string;
+  onFieldFilter: (v: string | null) => void;
+  onFieldQuery: (v: string) => void;
+  filteredCount: number | null;
+  totalCount: number;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {labelDefs.length > 0 && (
+        <select
+          value={labelFilter ?? ""}
+          onChange={(e) => onLabelFilter(e.target.value || null)}
+          className="h-8 rounded-lg border border-line bg-paper px-2 text-xs text-ink focus:border-evergreen focus:outline-none"
+          title="Filter by label"
+        >
+          <option value="">All labels</option>
+          <option value="__unlabeled">Unlabeled</option>
+          {labelDefs.map((l) => (
+            <option key={l.id} value={l.name}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {fieldDefs.length > 0 && (
+        <select
+          value={fieldFilter ?? ""}
+          onChange={(e) => onFieldFilter(e.target.value || null)}
+          className="h-8 rounded-lg border border-line bg-paper px-2 text-xs text-ink focus:border-evergreen focus:outline-none"
+          title="Filter by field"
+        >
+          <option value="">All fields</option>
+          {fieldDefs.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name} ({f.kind})
+            </option>
+          ))}
+        </select>
+      )}
+      {fieldFilter && (
+        <input
+          type="text"
+          value={fieldQuery}
+          onChange={(e) => onFieldQuery(e.target.value)}
+          placeholder="value contains…"
+          className="h-8 w-24 rounded-lg border border-line bg-paper px-2 text-xs placeholder:text-ink-soft/50 focus:border-evergreen focus:outline-none"
+        />
+      )}
+      {(labelFilter || fieldFilter) && (
+        <span className="rounded-full bg-evergreen-mist px-2 py-1 text-[11px] font-medium text-evergreen-deep">
+          {filteredCount} / {totalCount}
+        </span>
+      )}
+      {(labelFilter || fieldFilter) && (
+        <button
+          type="button"
+          onClick={() => {
+            onLabelFilter(null);
+            onFieldFilter(null);
+            onFieldQuery("");
+          }}
+          className="text-xs text-ink-soft hover:text-evergreen"
+        >
+          Clear
+        </button>
+      )}
+    </div>
+  );
+}
+
 function TreeSearch({
   persons,
   onLocate,
@@ -670,6 +837,7 @@ function PersonNode({
   linked = true,
   personHref = null,
   canEdit = true,
+  dimmed = false,
   onHover,
   onQuickAdd,
 }: {
@@ -687,6 +855,7 @@ function PersonNode({
   personHref?: string | null;
   /** Quick-add pills + re-root button (owner/editor only). */
   canEdit?: boolean;
+  dimmed?: boolean;
   onHover: (id: string | null) => void;
   onQuickAdd: (relation: Relation) => void;
 }) {
@@ -750,12 +919,14 @@ function PersonNode({
     </>
   );
 
+  const labelDots = (person.labels ?? []).slice(0, 4);
   return (
     <g
       data-node
       transform={`translate(${left}, ${top})`}
       onMouseEnter={() => onHover(person.id)}
       onMouseLeave={() => onHover(null)}
+      opacity={dimmed ? 0.18 : 1}
     >
       {/* Resting hit area: the card plus a small margin — narrow enough
           never to steal hover from a neighbouring card (couple gap is 24). */}
@@ -791,6 +962,21 @@ function PersonNode({
           stroke="var(--color-gold)"
           strokeWidth={3}
         />
+      )}
+      {labelDots.length > 0 && (
+        <g transform={`translate(${NODE_W / 2 - (labelDots.length * 8) / 2}, ${NODE_H + 4})`}>
+          {labelDots.map((lb, i) => (
+            <circle key={lb.id} cx={i * 8 + 4} cy={0} r={3.2} fill={labelColorFor(lb.name, lb.color)} stroke="white" strokeWidth={0.7} />
+          ))}
+        </g>
+      )}
+      {!dimmed && person.customFields && person.customFields.length > 0 && (
+        <g transform={`translate(${NODE_W - 8}, 6)`}>
+          <circle r={4} fill="var(--color-gold)" opacity={0.9} />
+          <text textAnchor="middle" dominantBaseline="middle" fontSize={7} fill="white" fontWeight={700}>
+            ·
+          </text>
+        </g>
       )}
 
       {hovered && canEdit && (

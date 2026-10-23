@@ -12,6 +12,7 @@ import { ShareMenu, type ShareLinkView } from "@/components/share-menu";
 import { PublicToggle } from "@/components/public-toggle";
 import { countPendingSuggestions } from "@/lib/public-trees";
 import { listShareLinks } from "@/lib/share";
+import { getPersonCustomValuesByTree, getPersonLabelsByTree, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
 import type { CanvasLink, CanvasPerson, CanvasUnion } from "@/lib/canvas-types";
 
 export default async function TreeCanvasPage({
@@ -45,19 +46,35 @@ export default async function TreeCanvasPage({
     .groupBy(memories.personId);
   const memoryCounts = new Map(memoryRows.map((r) => [r.personId, Number(r.c)]));
 
-  const canvasPersons: CanvasPerson[] = peopleRows.map((p) => ({
-    id: p.id,
-    firstName: p.firstName,
-    lastName: p.lastName,
-    alsoKnownAs: p.alsoKnownAs,
-    gender: p.gender,
-    living: p.living,
-    birthDateText: p.birthDateText,
-    birthPlace: p.birthPlace,
-    deathDateText: p.deathDateText,
-    deathPlace: p.deathPlace,
-    memoryCount: memoryCounts.get(p.id) ?? 0,
-  }));
+  const labelDefs = await listLabelDefs(treeId);
+  const fieldDefs = await listCustomFieldDefs(treeId);
+  const labelsByPerson = await getPersonLabelsByTree(treeId);
+  const customByPerson = await getPersonCustomValuesByTree(treeId);
+
+  const canvasPersons: CanvasPerson[] = peopleRows.map((p) => {
+    const lbs = labelsByPerson.get(p.id) ?? [];
+    const cvs = customByPerson.get(p.id) ?? [];
+    return {
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      alsoKnownAs: p.alsoKnownAs,
+      gender: p.gender,
+      living: p.living,
+      birthDateText: p.birthDateText,
+      birthPlace: p.birthPlace,
+      deathDateText: p.deathDateText,
+      deathPlace: p.deathPlace,
+      memoryCount: memoryCounts.get(p.id) ?? 0,
+      labels: lbs.map((l) => ({ id: l.id, name: l.name, color: l.color })),
+      customFields: cvs.map((c) => ({
+        fieldId: c.fieldId,
+        fieldName: c.fieldName,
+        kind: c.kind as never,
+        value: c.value,
+      })),
+    };
+  });
   const canvasUnions: CanvasUnion[] = unionRows.map((u) => ({
     id: u.id,
     partnerAId: u.partnerAId,
@@ -112,6 +129,12 @@ export default async function TreeCanvasPage({
           pendingCount={await pendingSuggestions}
         />
         <Link
+          href={`/app/trees/${treeId}/labels`}
+          className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
+        >
+          Labels & fields
+        </Link>
+        <Link
           href={`/app/trees/${treeId}/members`}
           className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
         >
@@ -130,20 +153,37 @@ export default async function TreeCanvasPage({
     memberNote = `You're a ${ROLE_LABEL[role]} on this tree${
       ownerName ? ` — shared by ${ownerName}` : ""
     }.`;
-    if (editable && tree.visibility === "public") {
-      const pendingCount = await countPendingSuggestions(treeId);
-      headerExtra = (
-        <a
-          href={`/app/trees/${treeId}/suggestions`}
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-evergreen/60 bg-evergreen-mist px-2.5 text-xs font-medium text-evergreen-deep transition-colors hover:bg-evergreen hover:text-paper"
+    // Editors can manage labels/fields even on private trees
+    if (editable) {
+      const labelsLink = (
+        <Link
+          href={`/app/trees/${treeId}/labels`}
+          className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
         >
-          Suggestions
-          {pendingCount > 0 && (
-            <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-evergreen px-1 text-[10px] font-semibold text-paper">
-              {pendingCount}
-            </span>
-          )}
-        </a>
+          Labels & fields
+        </Link>
+      );
+      const suggestionsPart = tree.visibility === "public" ? await (async () => {
+        const pendingCount = await countPendingSuggestions(treeId);
+        return (
+          <a
+            href={`/app/trees/${treeId}/suggestions`}
+            className="flex h-8 items-center gap-1.5 rounded-lg border border-evergreen/60 bg-evergreen-mist px-2.5 text-xs font-medium text-evergreen-deep transition-colors hover:bg-evergreen hover:text-paper"
+          >
+            Suggestions
+            {pendingCount > 0 && (
+              <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-evergreen px-1 text-[10px] font-semibold text-paper">
+                {pendingCount}
+              </span>
+            )}
+          </a>
+        );
+      })() : null;
+      headerExtra = (
+        <>
+          {labelsLink}
+          {suggestionsPart}
+        </>
       );
     }
   }
@@ -161,6 +201,8 @@ export default async function TreeCanvasPage({
       memberNote={memberNote}
       headerExtra={headerExtra}
       importHref={editable ? `/app/trees/${treeId}/import` : null}
+      labelDefs={labelDefs.map((l) => ({ id: l.id, name: l.name, color: l.color }))}
+      fieldDefs={fieldDefs.map((f) => ({ id: f.id, name: f.name, kind: f.kind as never, optionsJson: f.optionsJson }))}
     />
   );
 }

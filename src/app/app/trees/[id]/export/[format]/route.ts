@@ -3,8 +3,14 @@ import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { db } from "@/db";
 import {
+  customFieldDefs,
+  labelDefs,
   memories,
+  memoryCustomValues,
+  memoryLabels,
   parentChild,
+  personCustomValues,
+  personLabels,
   persons,
   unions,
   media,
@@ -59,6 +65,22 @@ export async function GET(
     .from(media)
     .where(eq(media.treeId, treeId));
 
+  // Labels & custom fields for this tree (for JSON export and GEDCOM notes)
+  const labelDefsRows = await db.select().from(labelDefs).where(eq(labelDefs.treeId, treeId));
+  const customFieldDefsRows = await db.select().from(customFieldDefs).where(eq(customFieldDefs.treeId, treeId));
+  const personLabelsRows = personRows.length > 0
+    ? await db.select().from(personLabels).where(inArray(personLabels.personId, personRows.map((p) => p.id)))
+    : [];
+  const memoryLabelsRows = memoryRows.length > 0
+    ? await db.select().from(memoryLabels).where(inArray(memoryLabels.memoryId, memoryRows.map((m) => m.memories.id)))
+    : [];
+  const personCustomValuesRows = personRows.length > 0
+    ? await db.select().from(personCustomValues).where(inArray(personCustomValues.personId, personRows.map((p) => p.id)))
+    : [];
+  const memoryCustomValuesRows = memoryRows.length > 0
+    ? await db.select().from(memoryCustomValues).where(inArray(memoryCustomValues.memoryId, memoryRows.map((m) => m.memories.id)))
+    : [];
+
   const redact = (p: Person): Person =>
     p.living
       ? {
@@ -74,16 +96,21 @@ export async function GET(
           notes: null,
         }
       : p;
+  // privacy: redact living relatives for public exports — same as share views
   if (publicExport) {
-    personRows = personRows.map(redact);
-    // Memories of living relatives (and their media) leave with the person.
     const livingIds = new Set(
       personRows.filter((p) => p.living).map((p) => p.id),
     );
+    personRows = personRows.map(redact);
     memoryRows = memoryRows.filter((m) => !livingIds.has(m.persons.id));
-    // Media hangs off memories, so the memory filter above already pulled
-    // the living's photos/voice notes out of the story.
-
+    // Labels/custom fields of living relatives stay private too
+    personLabelsRows.splice(0, personLabelsRows.length, ...personLabelsRows.filter((r) => !livingIds.has(r.personId)));
+    personCustomValuesRows.splice(0, personCustomValuesRows.length, ...personCustomValuesRows.filter((r) => !livingIds.has(r.personId)));
+    {
+      const remainingMemoryIds = new Set(memoryRows.map((m) => m.memories.id));
+      memoryLabelsRows.splice(0, memoryLabelsRows.length, ...memoryLabelsRows.filter((r) => remainingMemoryIds.has(r.memoryId)));
+      memoryCustomValuesRows.splice(0, memoryCustomValuesRows.length, ...memoryCustomValuesRows.filter((r) => remainingMemoryIds.has(r.memoryId)));
+    }
   }
 
   const safeName =
@@ -104,21 +131,51 @@ export async function GET(
       });
       memoriesByPerson.set(m.persons.id, list);
     }
+    // Build per-person label/custom strings for GEDCOM NOTES (GEDCOM-compatible)
+    const labelDefMap = new Map(labelDefsRows.map((l) => [l.id, l.name]));
+    const labelsByPersonForGed = new Map<string, string[]>();
+    for (const pl of personLabelsRows) {
+      const name = labelDefMap.get(pl.labelId);
+      if (!name) continue;
+      const arr = labelsByPersonForGed.get(pl.personId) ?? [];
+      arr.push(name);
+      labelsByPersonForGed.set(pl.personId, arr);
+    }
+    const customByPersonForGed = new Map<string, { name: string; value: string }[]>();
+    const fieldDefMap = new Map(customFieldDefsRows.map((f) => [f.id, f.name]));
+    for (const cv of personCustomValuesRows) {
+      const fname = fieldDefMap.get(cv.fieldId);
+      if (!fname) continue;
+      const arr = customByPersonForGed.get(cv.personId) ?? [];
+      arr.push({ name: fname, value: cv.value });
+      customByPersonForGed.set(cv.personId, arr);
+    }
     const text = writeGedcom({
       treeName: tree.name,
-      persons: personRows.map((p) => ({
-        id: p.id,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        gender: p.gender,
-        living: p.living,
-        birthDateText: p.birthDateText,
-        birthPlace: p.birthPlace,
-        deathDateText: p.deathDateText,
-        deathPlace: p.deathPlace,
-        notes: p.notes,
-        memories: memoriesByPerson.get(p.id) ?? [],
-      })),
+      persons: personRows.map((p) => {
+        const extraNotes: string[] = [];
+        const lbs = labelsByPersonForGed.get(p.id);
+        if (lbs && lbs.length > 0) extraNotes.push(`Labels: ${lbs.join(", ")}`);
+        const customs = customByPersonForGed.get(p.id);
+        if (customs) {
+          for (const c of customs) extraNotes.push(`${c.name}: ${c.value}`);
+        }
+        const baseNotes = p.notes ? [p.notes] : [];
+        const allNotes = [...baseNotes, ...extraNotes].join("\n\n") || null;
+        return {
+          id: p.id,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          gender: p.gender,
+          living: p.living,
+          birthDateText: p.birthDateText,
+          birthPlace: p.birthPlace,
+          deathDateText: p.deathDateText,
+          deathPlace: p.deathPlace,
+          notes: allNotes,
+          memories: memoriesByPerson.get(p.id) ?? [],
+        };
+      }),
       unions: unionRows.map((u) => ({
         id: u.id,
         partnerAId: u.partnerAId,
@@ -151,9 +208,13 @@ export async function GET(
         id: m.id,
         mimeType: m.mimeType,
         sizeBytes: m.sizeBytes,
-        // media files themselves live under data/uploads/ — the JSON export
-        // carries the metadata; a future zip export will bundle the files.
       })),
+      labelDefs: labelDefsRows,
+      customFieldDefs: customFieldDefsRows,
+      personLabels: personLabelsRows,
+      memoryLabels: memoryLabelsRows,
+      personCustomValues: personCustomValuesRows,
+      memoryCustomValues: memoryCustomValuesRows,
     };
     return new Response(JSON.stringify(payload, null, 2), {
       headers: {

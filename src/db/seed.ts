@@ -20,9 +20,14 @@
 import type Database from "better-sqlite3";
 import { scryptSync, randomBytes } from "node:crypto";
 import {
+  DEMO_CUSTOM_FIELD_DEFS,
+  DEMO_LABEL_DEFS,
   DEMO_LINKS,
   DEMO_MEMORIES,
+  DEMO_MEMORY_LABELS,
   DEMO_PERSONS,
+  DEMO_PERSON_CUSTOM_VALUES,
+  DEMO_PERSON_LABELS,
   DEMO_TREE,
   DEMO_UNIONS,
   DEMO_USER,
@@ -100,6 +105,21 @@ export function ensureDemoData(sqlite: Database.Database): void {
     `INSERT INTO memories (id, person_id, kind, body, occurred_text, author_name, created_at)
      VALUES (?, ?, 'text', ?, ?, ?, ?)`,
   );
+  const LD = sqlite.prepare(
+    "INSERT INTO label_defs (id, tree_id, name, color, created_at) VALUES (?, ?, ?, ?, ?)",
+  );
+  const PL = sqlite.prepare(
+    "INSERT INTO person_labels (id, person_id, label_id, created_at) VALUES (?, ?, ?, ?)",
+  );
+  const CFD = sqlite.prepare(
+    "INSERT INTO custom_field_defs (id, tree_id, name, kind, options_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+  const PCV = sqlite.prepare(
+    "INSERT INTO person_custom_values (id, person_id, field_id, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+  const ML = sqlite.prepare(
+    "INSERT INTO memory_labels (id, memory_id, label_id, created_at) VALUES (?, ?, ?, ?)",
+  );
 
   for (const bundle of TREE_BUNDLES) {
     T.run(
@@ -139,5 +159,21 @@ export function ensureDemoData(sqlite: Database.Database): void {
     for (const m of bundle.memories) {
       M.run(m.id, m.person, m.body, m.when, m.author, now);
     }
+  }
+
+  for (const ld of DEMO_LABEL_DEFS) {
+    LD.run(ld.id, ld.treeId, ld.name, ld.color, now);
+  }
+  for (const pl of DEMO_PERSON_LABELS) {
+    PL.run(pl.id, pl.personId, pl.labelId, now);
+  }
+  for (const cfd of DEMO_CUSTOM_FIELD_DEFS) {
+    CFD.run(cfd.id, cfd.treeId, cfd.name, cfd.kind, cfd.optionsJson, now);
+  }
+  for (const pcv of DEMO_PERSON_CUSTOM_VALUES) {
+    PCV.run(pcv.id, pcv.personId, pcv.fieldId, pcv.value, now, now);
+  }
+  for (const ml of DEMO_MEMORY_LABELS) {
+    ML.run(ml.id, ml.memoryId, ml.labelId, now);
   }
 }

@@ -10,6 +10,7 @@ import {
 } from "@/actions/persons";
 import type { Person } from "@/db/schema";
 import { useToast } from "@/components/toaster";
+import { MemoryLabelsSection } from "@/components/labels-fields";
 
 const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink-soft";
 
@@ -192,6 +193,9 @@ export function MemorySection({
   initialMemories,
   canAdd = true,
   canDeleteAny = true,
+  canLabel = false,
+  allLabelDefs = [],
+  memoryLabelsMap = {},
 }: {
   treeId: string;
   personId: string;
@@ -201,6 +205,9 @@ export function MemorySection({
   canAdd?: boolean;
   /** Editor and up may remove anyone's memory (authors can remove their own). */
   canDeleteAny?: boolean;
+  canLabel?: boolean;
+  allLabelDefs?: { id: string; name: string; color: string | null }[];
+  memoryLabelsMap?: Record<string, { id: string; name: string; color: string | null }[]>;
 }) {
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -320,6 +327,13 @@ export function MemorySection({
                   .filter(Boolean)
                   .join(" · ")}
               </p>
+              <MemoryLabelsSection
+                treeId={treeId}
+                memoryId={m.id}
+                labels={memoryLabelsMap[m.id] ?? []}
+                allLabelDefs={allLabelDefs}
+                canEdit={canLabel}
+              />
               {(canDeleteAny || m.mine) && (
               <form
                 action={(fd: FormData) => {

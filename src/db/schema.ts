@@ -381,6 +381,154 @@ export const treeSuggestions = sqliteTable(
   ],
 );
 
+
+/**
+ * Labels — lightweight classification for people and memories.
+ * A label definition lives per tree (e.g. "Immigrant", "Veteran"); instances
+ * are attached via junction tables so filtering is a simple join.
+ */
+export const labelDefs = sqliteTable(
+  "label_defs",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("label_defs_tree_name_idx").on(t.treeId, t.name),
+    index("label_defs_tree_idx").on(t.treeId),
+  ],
+);
+
+export const personLabels = sqliteTable(
+  "person_labels",
+  {
+    id: text("id").primaryKey(),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    labelId: text("label_id")
+      .notNull()
+      .references(() => labelDefs.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("person_labels_person_label_idx").on(t.personId, t.labelId),
+    index("person_labels_label_idx").on(t.labelId),
+    index("person_labels_person_idx").on(t.personId),
+  ],
+);
+
+export const memoryLabels = sqliteTable(
+  "memory_labels",
+  {
+    id: text("id").primaryKey(),
+    memoryId: text("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    labelId: text("label_id")
+      .notNull()
+      .references(() => labelDefs.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("memory_labels_memory_label_idx").on(t.memoryId, t.labelId),
+    index("memory_labels_label_idx").on(t.labelId),
+  ],
+);
+
+/**
+ * Custom field definitions — tree-scoped metadata slots (text, number, date,
+ * select). Values live in person_custom_values / memory_custom_values.
+ */
+export const customFieldDefs = sqliteTable(
+  "custom_field_defs",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    kind: text("kind", {
+      enum: ["text", "number", "date", "select"],
+    }).notNull(),
+    optionsJson: text("options_json"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("custom_field_defs_tree_name_idx").on(t.treeId, t.name),
+    index("custom_field_defs_tree_idx").on(t.treeId),
+  ],
+);
+
+export const personCustomValues = sqliteTable(
+  "person_custom_values",
+  {
+    id: text("id").primaryKey(),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    fieldId: text("field_id")
+      .notNull()
+      .references(() => customFieldDefs.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("person_custom_values_person_field_idx").on(t.personId, t.fieldId),
+    index("person_custom_values_field_idx").on(t.fieldId),
+    index("person_custom_values_person_idx").on(t.personId),
+  ],
+);
+
+export const memoryCustomValues = sqliteTable(
+  "memory_custom_values",
+  {
+    id: text("id").primaryKey(),
+    memoryId: text("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    fieldId: text("field_id")
+      .notNull()
+      .references(() => customFieldDefs.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex("memory_custom_values_memory_field_idx").on(t.memoryId, t.fieldId),
+    index("memory_custom_values_field_idx").on(t.fieldId),
+  ],
+);
+
+export type LabelDef = typeof labelDefs.$inferSelect;
+export type PersonLabel = typeof personLabels.$inferSelect;
+export type MemoryLabel = typeof memoryLabels.$inferSelect;
+export type CustomFieldDef = typeof customFieldDefs.$inferSelect;
+export type PersonCustomValue = typeof personCustomValues.$inferSelect;
+export type MemoryCustomValue = typeof memoryCustomValues.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type Tree = typeof trees.$inferSelect;
 export type Person = typeof persons.$inferSelect;
