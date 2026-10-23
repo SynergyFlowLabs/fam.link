@@ -18,6 +18,7 @@ import {
   validateFieldDef,
   validateFieldValue,
   parseStoredOptions,
+  isFieldVisibility,
 } from "@/lib/custom-fields";
 import { labelKey } from "@/lib/labels";
 import { fail, OK, type ActionResult } from "@/lib/action-result";
@@ -55,8 +56,9 @@ export async function createCustomFieldDefAction(formData: FormData): Promise<Ac
   const kindRaw = String(formData.get("kind") ?? "").trim();
   const optionsRaw = String(formData.get("options") ?? formData.get("optionsJson") ?? "");
 
-  const { error } = await requireAccess(treeId, "edit");
-  if (error) return error;
+  const { error, access } = await requireAccess(treeId, "edit");
+  if (error || !access) return error ?? fail("You don't have access to that tree.");
+  const isOwner = access.role === "owner";
 
   const parsed = validateFieldDef({ name: nameRaw, kind: kindRaw, optionsRaw });
   if (!parsed.ok) return fail(parsed.error);
@@ -66,12 +68,17 @@ export async function createCustomFieldDefAction(formData: FormData): Promise<Ac
     return fail(`A field called "${parsed.name}" already exists.`);
   }
 
+  // Visibility is an owner decision (issue #33): non-owners always create shared.
+  const visibilityRaw = String(formData.get("visibility") ?? "shared");
+  const visibility = isOwner && isFieldVisibility(visibilityRaw) ? visibilityRaw : "shared";
+
   await db.insert(customFieldDefs).values({
     id: randomUUID(),
     treeId,
     name: parsed.name,
     kind: parsed.kind,
     optionsJson: parsed.options ? JSON.stringify(parsed.options) : null,
+    visibility,
   });
   await touchTree(treeId);
   revalidateTree(treeId);
@@ -103,8 +110,9 @@ export async function updateCustomFieldDefAction(formData: FormData): Promise<Ac
   const kindRaw = String(formData.get("kind") ?? "").trim();
   const optionsRaw = String(formData.get("options") ?? "");
 
-  const { error } = await requireAccess(treeId, "edit");
-  if (error) return error;
+  const { error, access } = await requireAccess(treeId, "edit");
+  if (error || !access) return error ?? fail("You don't have access to that tree.");
+  const isOwner = access.role === "owner";
 
   const parsed = validateFieldDef({ name: nameRaw, kind: kindRaw, optionsRaw });
   if (!parsed.ok) return fail(parsed.error);
@@ -114,12 +122,19 @@ export async function updateCustomFieldDefAction(formData: FormData): Promise<Ac
     return fail(`Another field is already called "${parsed.name}".`);
   }
 
+  // Only the owner can change visibility (issue #33) — editors' updates
+  // leave the stored visibility untouched.
+  const visibilityRaw = String(formData.get("visibility") ?? "");
+  const visibility =
+    isOwner && isFieldVisibility(visibilityRaw) ? visibilityRaw : undefined;
+
   const updated = await db
     .update(customFieldDefs)
     .set({
       name: parsed.name,
       kind: parsed.kind,
       optionsJson: parsed.options ? JSON.stringify(parsed.options) : null,
+      ...(visibility ? { visibility } : {}),
     })
     .where(and(eq(customFieldDefs.id, fieldId), eq(customFieldDefs.treeId, treeId)))
     .returning({ id: customFieldDefs.id });

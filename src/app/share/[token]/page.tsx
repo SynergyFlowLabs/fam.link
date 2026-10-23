@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { count, eq } from "drizzle-orm";
 import { getPersonCustomValuesByTree, getPersonLabelsByTree, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
+import { filterDefsForViewer } from "@/lib/custom-fields";
 import { db } from "@/db";
 import { memories, parentChild, persons, trees, unions } from "@/db/schema";
 import { getShareLinkByToken } from "@/lib/share";
@@ -84,7 +85,10 @@ export default async function SharedTreePage({
     .groupBy(memories.personId);
   const memoryCounts = new Map(memoryRows.map((r) => [r.personId, Number(r.c)]));
   const labelDefs = await listLabelDefs(link.treeId);
-  const fieldDefs = await listCustomFieldDefs(link.treeId);
+  // Share viewers are never the owner — private fields never leave the app
+  // (issue #33), living redaction handles the rest.
+  const fieldDefs = filterDefsForViewer(await listCustomFieldDefs(link.treeId), false);
+  const shareDefIds = new Set(fieldDefs.map((f) => f.id));
   const labelsByPerson = await getPersonLabelsByTree(link.treeId);
   const customByPerson = await getPersonCustomValuesByTree(link.treeId);
 
@@ -104,7 +108,9 @@ export default async function SharedTreePage({
       deathPlace: p.deathPlace,
       memoryCount: memoryCounts.get(p.id) ?? 0,
       labels: lbs.map((l) => ({ id: l.id, name: l.name, color: l.color })),
-      customFields: cvs.map((c) => ({ fieldId: c.fieldId, fieldName: c.fieldName, kind: c.kind as never, value: c.value })),
+      customFields: cvs
+        .filter((c) => shareDefIds.has(c.fieldId))
+        .map((c) => ({ fieldId: c.fieldId, fieldName: c.fieldName, kind: c.kind as never, value: c.value })),
     });
   });
   const canvasUnions: CanvasUnion[] = unionRows.map((u) => ({

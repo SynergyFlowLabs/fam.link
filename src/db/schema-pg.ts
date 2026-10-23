@@ -371,7 +371,12 @@ export const customFieldDefs = pgTable(
       enum: ["text", "number", "date", "select"],
     }).notNull(),
     optionsJson: text("options_json"),
+    // "shared" = every member sees it; "private" = owner only (issue #33).
+    visibility: text("visibility", { enum: ["shared", "private"] })
+      .notNull()
+      .default("shared"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+
   },
   (t) => [
     uniqueIndex("custom_field_defs_tree_name_idx").on(t.treeId, t.name),

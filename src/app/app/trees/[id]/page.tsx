@@ -13,6 +13,7 @@ import { PublicToggle } from "@/components/public-toggle";
 import { countPendingSuggestions } from "@/lib/public-trees";
 import { listShareLinks } from "@/lib/share";
 import { getPersonCustomValuesByTree, getPersonLabelsByTree, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
+import { filterDefsForViewer } from "@/lib/custom-fields";
 import type { CanvasLink, CanvasPerson, CanvasUnion } from "@/lib/canvas-types";
 
 export default async function TreeCanvasPage({
@@ -71,13 +72,22 @@ export default async function TreeCanvasPage({
   const linkRowsForCanvas = scopeId ? filteredLinkRows : linkRows;
 
   const labelDefs = await listLabelDefs(treeId);
-  const fieldDefs = await listCustomFieldDefs(treeId);
+  const fieldDefsAll = await listCustomFieldDefs(treeId);
+  // Private fields are the owner's eyes only (issue #33) — non-owners get
+  // no trace: no chip, no filter option, no value.
+  const isOwner = role === "owner";
+  const fieldDefs = filterDefsForViewer(fieldDefsAll, isOwner);
+  const privateDefIds = new Set(
+    fieldDefsAll.filter((f) => !fieldDefs.includes(f)).map((f) => f.id),
+  );
   const labelsByPerson = await getPersonLabelsByTree(treeId);
   const customByPerson = await getPersonCustomValuesByTree(treeId);
 
   const canvasPersons: CanvasPerson[] = peopleRowsForCanvas.map((p) => {
     const lbs = labelsByPerson.get(p.id) ?? [];
-    const cvs = customByPerson.get(p.id) ?? [];
+    const cvs = (customByPerson.get(p.id) ?? []).filter(
+      (c) => !privateDefIds.has(c.fieldId),
+    );
     return {
       id: p.id,
       firstName: p.firstName,

@@ -141,5 +141,11 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
       "CREATE INDEX IF NOT EXISTS `comments_target_idx` ON `comments` (`target_type`,`target_id`);",
       "CREATE INDEX IF NOT EXISTS `comments_tree_created_idx` ON `comments` (`tree_id`,`created_at`);",
     ],
+  },  {
+    // Per-field visibility on custom fields (issue #33, P3.3)
+    name: "0011_field_visibility",
+    statements: [
+      "ALTER TABLE `custom_field_defs` ADD COLUMN `visibility` text DEFAULT 'shared' NOT NULL;",
+    ],
   },
 ];

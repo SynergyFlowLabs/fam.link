@@ -10,6 +10,8 @@ import { canEdit } from "@/lib/roles";
 import { getPublicTree } from "@/lib/public-trees";
 import { displayName, lifeLine, REDACTED_NAME } from "@/lib/canvas-types";
 import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels } from "@/lib/tree-labels";
+import { listCustomFieldDefs } from "@/lib/tree-labels";
+import { filterDefsForViewer } from "@/lib/custom-fields";
 import { labelColorFor } from "@/lib/labels";
 import {
   SuggestEditForm,
@@ -117,7 +119,13 @@ export default async function ExplorePersonPage({
     .where(eq(memories.personId, personId));
 
   const personLabels = await getPersonLabels(personId);
-  const personFieldValues = await getPersonCustomValues(personId);
+  // Public viewers are never the owner — private fields never show (issue #33).
+  const exploreDefIds = new Set(
+    filterDefsForViewer(await listCustomFieldDefs(treeId), false).map((f) => f.id),
+  );
+  const personFieldValues = (await getPersonCustomValues(personId)).filter((v) =>
+    exploreDefIds.has(v.fieldId),
+  );
   const memoryLabelsMap = await getMemoryLabelsByTree(treeId);
 
   const user = await getCurrentUser();

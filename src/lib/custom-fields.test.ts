@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+
   normalizeFieldName,
   isValidFieldName,
   parseSelectOptions,
@@ -9,6 +10,9 @@ import {
   matchesFieldFilter,
   parseStoredOptions,
   FIELD_KINDS,
+  filterDefsForViewer,
+  canSeeField,
+  isFieldVisibility,
 } from "./custom-fields.ts";
 
 describe("normalizeFieldName", () => {
@@ -129,5 +133,21 @@ describe("parseStoredOptions", () => {
   it("FIELD_KINDS includes expected", () => {
     assert.ok(FIELD_KINDS.includes("text"));
     assert.ok(FIELD_KINDS.includes("select"));
+  });
+
+  it("visibility: private fields are owner-only everywhere", () => {
+    const defs = [
+      { id: "f1", visibility: "shared" as const },
+      { id: "f2", visibility: "private" as const },
+      { id: "f3" }, // legacy row — defaults to shared
+    ];
+    assert.deepEqual(filterDefsForViewer(defs, true).map((d) => d.id), ["f1", "f2", "f3"]);
+    assert.deepEqual(filterDefsForViewer(defs, false).map((d) => d.id), ["f1", "f3"]);
+    assert.ok(canSeeField("private", true));
+    assert.equal(canSeeField("private", false), false);
+    assert.ok(canSeeField("shared", false));
+    assert.ok(canSeeField(null, false)); // legacy → shared
+    assert.ok(isFieldVisibility("private"));
+    assert.equal(isFieldVisibility("secret"), false);
   });
 });
