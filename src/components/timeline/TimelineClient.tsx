@@ -134,6 +134,7 @@ export function TimelineClient({ treeId, treeName, persons, entries, paternal, m
           <p className="text-xs text-ink-soft">{filtered.length} of {entries.length} entries · {grouped.length} decades · hotspot: paternal {hotspot.paternal} / maternal {hotspot.maternal} / other {hotspot.other}</p>
         </div>
         <div className="flex items-center gap-2">
+          <a href={(backHref ?? `/app/trees/${treeId}`) + "/map"} className="flex h-8 items-center rounded-lg border border-line bg-card px-2.5 text-xs text-ink-soft hover:border-evergreen hover:text-evergreen">Map</a>
           <a href={backHref ?? `/app/trees/${treeId}`} className="flex h-8 items-center rounded-lg border border-line bg-card px-2.5 text-xs text-ink-soft hover:border-evergreen hover:text-evergreen">Back to tree</a>
           {hasFilters && <button onClick={() => { setBranchFilter(new Set()); setDecadeFilter(new Set()); setPersonFilter(new Set()); }} className="text-xs text-ink-soft hover:text-evergreen">Clear</button>}
         </div>

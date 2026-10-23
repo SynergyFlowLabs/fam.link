@@ -1,5 +1,6 @@
 import {
   boolean,
+  doublePrecision,
   index,
   integer,
   pgTable,
@@ -442,6 +443,26 @@ export const personEvents = pgTable(
   ],
 );
 
+/**
+ * Geocode cache — optional lat/lng keyed by normalized place text.
+ * Mirrors schema.ts placeGeocodes exactly (schema-parity.test.ts).
+ */
+export const placeGeocodes = pgTable(
+  "place_geocodes",
+  {
+    id: text("id").primaryKey(),
+    placeKey: text("place_key").notNull().unique(),
+    placeText: text("place_text").notNull(),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    displayName: text("display_name"),
+    source: text("source"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("place_geocodes_key_idx").on(t.placeKey)],
+);
+
 export type PgLabelDef = typeof labelDefs.$inferSelect;
 export type PgPersonLabel = typeof personLabels.$inferSelect;
 export type PgMemoryLabel = typeof memoryLabels.$inferSelect;
@@ -449,6 +470,7 @@ export type PgCustomFieldDef = typeof customFieldDefs.$inferSelect;
 export type PgPersonCustomValue = typeof personCustomValues.$inferSelect;
 export type PgMemoryCustomValue = typeof memoryCustomValues.$inferSelect;
 export type PgPersonEvent = typeof personEvents.$inferSelect;
+export type PgPlaceGeocode = typeof placeGeocodes.$inferSelect;
 
 
 export type PgUser = typeof users.$inferSelect;
