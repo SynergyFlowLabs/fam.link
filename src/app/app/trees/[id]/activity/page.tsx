@@ -212,6 +212,9 @@ const ACTION_LABEL: Record<ActivityAction, string> = {
   delete_event: "Life events removed",
   invite: "Invites",
   share: "Share links",
+  add_comment: "Comments",
+  delete_comment: "Comment removals",
+  resolve_comment: "Resolved threads",
   undo: "Undos",
 };
 

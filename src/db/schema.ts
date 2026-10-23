@@ -625,6 +625,9 @@ export const activityFeed = sqliteTable(
         "delete_event",
         "invite",
         "share",
+        "add_comment",
+        "delete_comment",
+        "resolve_comment",
         "undo",
       ],
     }).notNull(),
@@ -647,6 +650,49 @@ export const activityFeed = sqliteTable(
   ],
 );
 
+/**
+ * Comment threads on a person or a memory — the discussion layer
+ * (issue #32). One level of threading: `parent_id` always points at the
+ * ROOT comment, and resolution lives on the root. Polymorphic target, so
+ * `target_id` has no FK — person/memory deletion sweeps matching rows.
+ */
+export const comments = sqliteTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    targetType: text("target_type", { enum: ["person", "memory"] }).notNull(),
+    targetId: text("target_id").notNull(),
+    // The account that wrote it (null for deleted accounts — the name
+    // snapshot below keeps the thread readable).
+    authorUserId: text("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    authorName: text("author_name").notNull(),
+    body: text("body").notNull(),
+    // Root comment id for replies (null on top-level comments).
+    parentId: text("parent_id"),
+    resolved: integer("resolved", { mode: "boolean" }).notNull().default(false),
+    resolvedByUserId: text("resolved_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    resolvedByName: text("resolved_by_name"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index("comments_target_idx").on(t.targetType, t.targetId),
+    index("comments_tree_created_idx").on(t.treeId, t.createdAt),
+  ],
+);
+
+export type Comment = typeof comments.$inferSelect;
 export type LabelDef = typeof labelDefs.$inferSelect;
 export type PersonLabel = typeof personLabels.$inferSelect;
 export type MemoryLabel = typeof memoryLabels.$inferSelect;

@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { useRef, useState, useTransition } from "react";
 import { QuickAddModal, type Relation } from "@/components/quick-add-modal";
 import {
@@ -196,6 +198,7 @@ export function MemorySection({
   canLabel = false,
   allLabelDefs = [],
   memoryLabelsMap = {},
+  commentNodes = {},
 }: {
   treeId: string;
   personId: string;
@@ -208,6 +211,8 @@ export function MemorySection({
   canLabel?: boolean;
   allLabelDefs?: { id: string; name: string; color: string | null }[];
   memoryLabelsMap?: Record<string, { id: string; name: string; color: string | null }[]>;
+  /** Server-rendered comment thread per memory id (issue #32). */
+  commentNodes?: Record<string, ReactNode>;
 }) {
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -334,6 +339,7 @@ export function MemorySection({
                 allLabelDefs={allLabelDefs}
                 canEdit={canLabel}
               />
+              {commentNodes[m.id]}
               {(canDeleteAny || m.mine) && (
               <form
                 action={(fd: FormData) => {

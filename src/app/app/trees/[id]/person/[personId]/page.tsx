@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { memories, parentChild, personEvents, persons, unions } from "@/db/schema";
+import { CommentSection, type CommentDTO } from "@/components/comments/comment-thread";
+import { listCommentsForTargets, listMentionableMembers } from "@/lib/comment-queries";
 import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canComment, canEdit } from "@/lib/roles";
@@ -116,6 +118,47 @@ export default async function PersonPage({
   const personFieldValues = await getPersonCustomValues(personId);
   const memoryLabelsMap = await getMemoryLabelsByTree(treeId);
 
+  // Discussion threads: on the person + on each of their memories (issue #32).
+  const commentRows = await listCommentsForTargets(treeId, [
+    { type: "person", id: personId },
+    ...memoryRows.map((m) => ({ type: "memory" as const, id: m.id })),
+  ]);
+  const toDTO = (c: (typeof commentRows)[number]): CommentDTO => ({
+    id: c.id,
+    parentId: c.parentId,
+    authorUserId: c.authorUserId,
+    authorName: c.authorName,
+    body: c.body,
+    resolved: c.resolved,
+    resolvedByName: c.resolvedByName,
+    createdAtMs: new Date(c.createdAt).getTime(),
+  });
+  const personComments = commentRows
+    .filter((c) => c.targetType === "person")
+    .map(toDTO);
+  const memoryComments = new Map<string, CommentDTO[]>();
+  for (const c of commentRows) {
+    if (c.targetType !== "memory") continue;
+    const list = memoryComments.get(c.targetId) ?? [];
+    list.push(toDTO(c));
+    memoryComments.set(c.targetId, list);
+  }
+  const mentionMembers = await listMentionableMembers(treeId);
+  const memberLinks = Object.fromEntries(
+    mentionMembers
+      .filter((m) => m.personId)
+      .map((m) => [m.userId, `/app/trees/${treeId}/person/${m.personId}`]),
+  );
+  const commentSectionProps = {
+    treeId,
+    viewer: { id: user.id, name: user.name },
+    canComment: canComment(role),
+    canResolve: canEdit(role),
+    canManage: role === "owner",
+    members: mentionMembers,
+    memberLinks,
+  };
+
   const name = displayName(person);
   const initials = [person.firstName, person.lastName]
     .map((w) => (w ? w[0] : ""))
@@ -216,6 +259,21 @@ export default async function PersonPage({
           treeId={treeId}
           personId={personId}
           personName={name}
+          commentNodes={Object.fromEntries(
+            memoryRows
+              .filter((m) => memoryComments.has(m.id) || canComment(role))
+              .map((m) => [
+                m.id,
+                <CommentSection
+                  key={m.id}
+                  targetType="memory"
+                  targetId={m.id}
+                  comments={memoryComments.get(m.id) ?? []}
+                  compact
+                  {...commentSectionProps}
+                />,
+              ]),
+          )}
           canAdd={canComment(role)}
           canDeleteAny={canEdit(role)}
           canLabel={canComment(role) || canEdit(role)}
@@ -250,6 +308,16 @@ export default async function PersonPage({
           personName={name}
           events={sortedEvents}
           canEdit={canEdit(role)}
+        />
+      </div>
+
+      <div className="mt-6">
+        <CommentSection
+          targetType="person"
+          targetId={personId}
+          comments={personComments}
+          defaultOpen
+          {...commentSectionProps}
         />
       </div>
 

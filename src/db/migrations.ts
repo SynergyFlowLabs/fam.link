@@ -133,5 +133,13 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
       "ALTER TABLE `tree_invites` ADD COLUMN `scope_person_id` text REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE set null;",
       "ALTER TABLE `tree_members` ADD COLUMN `scope_person_id` text REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE set null;",
     ],
+  },  {
+    // Comment threads on persons & memories (issue #32, P3.2)
+    name: "0010_comments",
+    statements: [
+      "CREATE TABLE IF NOT EXISTS `comments` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`target_type` text NOT NULL,\n\t`target_id` text NOT NULL,\n\t`author_user_id` text,\n\t`author_name` text NOT NULL,\n\t`body` text NOT NULL,\n\t`parent_id` text,\n\t`resolved` integer DEFAULT false NOT NULL,\n\t`resolved_by_user_id` text,\n\t`resolved_by_name` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\t`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`author_user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,\n\tFOREIGN KEY (`resolved_by_user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+      "CREATE INDEX IF NOT EXISTS `comments_target_idx` ON `comments` (`target_type`,`target_id`);",
+      "CREATE INDEX IF NOT EXISTS `comments_tree_created_idx` ON `comments` (`tree_id`,`created_at`);",
+    ],
   },
 ];
