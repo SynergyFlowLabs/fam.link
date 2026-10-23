@@ -648,6 +648,34 @@ export const sources = pgTable(
 
 export type PgSource = typeof sources.$inferSelect;
 
+/**
+ * Story prompts (issue #38) — gentle interview questions. tree_id NULL =
+ * global curated defaults; tree-scoped rows are a family's own customs.
+ */
+export const storyPrompts = pgTable(
+  "story_prompts",
+  {
+    id: text("id").primaryKey(),
+    // NULL = global curated default, visible in every tree
+    treeId: text("tree_id").references(() => trees.id, {
+      onDelete: "cascade",
+    }),
+    prompt: text("prompt").notNull(),
+    category: text("category", {
+      enum: ["childhood", "family", "work", "migration", "tradition", "custom"],
+    }).notNull(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("story_prompts_tree_idx").on(t.treeId)],
+);
+
+export type PgStoryPrompt = typeof storyPrompts.$inferSelect;
+
 /** person ←→ source (many-to-many). */
 export const personSources = pgTable(
   "person_sources",

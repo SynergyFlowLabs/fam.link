@@ -595,5 +595,23 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
       EXCEPTION WHEN duplicate_object THEN null; END $$;`,
       `ALTER TABLE "media" ADD COLUMN IF NOT EXISTS "person_id" text`,
     ],
+  },  {
+    // Story prompts (issue #38, P4.3)
+    name: "0012_story_prompts",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "story_prompts" (
+        "id" text PRIMARY KEY NOT NULL,
+        "tree_id" text,
+        "prompt" text NOT NULL,
+        "category" text NOT NULL,
+        "created_by" text,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `DO $$ BEGIN
+        ALTER TABLE "story_prompts" ADD CONSTRAINT "story_prompts_tree_id_trees_id_fk" FOREIGN KEY ("tree_id") REFERENCES "trees"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+        ALTER TABLE "story_prompts" ADD CONSTRAINT "story_prompts_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+      EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+      `CREATE INDEX IF NOT EXISTS "story_prompts_tree_idx" ON "story_prompts" ("tree_id")`,
+    ],
   },
 ];

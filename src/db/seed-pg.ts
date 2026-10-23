@@ -4,6 +4,7 @@
  */
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { hashPasswordSync } from "@/lib/auth-hash";
+import { CURATED_PROMPTS } from "@/lib/story-prompts";
 import {
   DEMO_CUSTOM_FIELD_DEFS,
   DEMO_LABEL_DEFS,
@@ -163,4 +164,21 @@ export async function ensureDemoDataPg(db: PgAppDb): Promise<void> {
       labelId: ml.labelId,
     })),
   );
+}
+
+/**
+ * Global curated story prompts (issue #38) — idempotent, stable ids.
+ */
+export async function ensureStoryPromptsPg(db: PgAppDb): Promise<void> {
+  await db
+    .insert(pg.storyPrompts)
+    .values(
+      CURATED_PROMPTS.map((p, i) => ({
+        id: `sp-${String(i + 1).padStart(2, "0")}`,
+        treeId: null,
+        prompt: p.prompt,
+        category: p.category,
+      })),
+    )
+    .onConflictDoNothing();
 }

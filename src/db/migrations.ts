@@ -175,5 +175,13 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
       "ALTER TABLE `media` ADD `provenance` text;",
       "ALTER TABLE `media` ADD COLUMN `person_id` REFERENCES `persons`(`id`) ON DELETE set null;",
     ],
+  },  {
+    // Story prompts (issue #38, P4.3) — curated interview questions;
+    // tree_id NULL rows are the global defaults.
+    name: "0015_story_prompts",
+    statements: [
+      "CREATE TABLE IF NOT EXISTS `story_prompts` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text,\n\t`prompt` text NOT NULL,\n\t`category` text NOT NULL,\n\t`created_by` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+      "CREATE INDEX IF NOT EXISTS `story_prompts_tree_idx` ON `story_prompts` (`tree_id`);",
+    ],
   },
 ];

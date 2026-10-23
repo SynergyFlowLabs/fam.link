@@ -322,6 +322,42 @@ export const sources = sqliteTable(
 
 export type Source = typeof sources.$inferSelect;
 
+/**
+ * Story prompts (issue #38) — gentle interview questions that lower the
+ * "what do I write?" barrier. tree_id NULL rows are the global curated
+ * defaults; tree-scoped rows are a family's own customs.
+ */
+export const storyPrompts = sqliteTable(
+  "story_prompts",
+  {
+    id: text("id").primaryKey(),
+    // NULL = global curated default, visible in every tree
+    treeId: text("tree_id").references(() => trees.id, {
+      onDelete: "cascade",
+    }),
+    prompt: text("prompt").notNull(),
+    category: text("category", {
+      enum: [
+        "childhood",
+        "family",
+        "work",
+        "migration",
+        "tradition",
+        "custom",
+      ],
+    }).notNull(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("story_prompts_tree_idx").on(t.treeId)],
+);
+
+export type StoryPrompt = typeof storyPrompts.$inferSelect;
+
 /** person ←→ source (many-to-many). */
 export const personSources = sqliteTable(
   "person_sources",

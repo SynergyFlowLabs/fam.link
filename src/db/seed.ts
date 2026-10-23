@@ -18,6 +18,7 @@
  * is just the raw-SQLite insertion mechanics.
  */
 import type Database from "better-sqlite3";
+import { CURATED_PROMPTS } from "@/lib/story-prompts";
 import { scryptSync, randomBytes } from "node:crypto";
 import {
   DEMO_CUSTOM_FIELD_DEFS,
@@ -175,5 +176,19 @@ export function ensureDemoData(sqlite: Database.Database): void {
   }
   for (const ml of DEMO_MEMORY_LABELS) {
     ML.run(ml.id, ml.memoryId, ml.labelId, now);
+  }
+}
+
+/**
+ * Global curated story prompts (issue #38) — seeded once into every
+ * database, independent of the demo user. Stable ids (`sp-*`) keep the
+ * pick-day jitter deterministic and re-seeding idempotent.
+ */
+export function ensureStoryPrompts(sqlite: Database.Database): void {
+  const stmt = sqlite.prepare(
+    "INSERT OR IGNORE INTO story_prompts (id, tree_id, prompt, category) VALUES (?, NULL, ?, ?)",
+  );
+  for (const [i, p] of CURATED_PROMPTS.entries()) {
+    stmt.run(`sp-${String(i + 1).padStart(2, "0")}`, p.prompt, p.category);
   }
 }
