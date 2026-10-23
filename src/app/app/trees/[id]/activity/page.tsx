@@ -218,6 +218,7 @@ const ACTION_LABEL: Record<ActivityAction, string> = {
   suggest: "Suggestions",
   review_suggestion: "Suggestion reviews",
   ask: "Ask-a-relative",
+  source: "Sources",
   undo: "Undos",
 };
 

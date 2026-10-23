@@ -2,7 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { memories, parentChild, personEvents, persons, unions } from "@/db/schema";
+import {
+  memories,
+  parentChild,
+  personEvents,
+  persons,
+  unions,
+  sources,
+  personSources,
+  memorySources,
+  eventSources,
+} from "@/db/schema";
 import { CommentSection, type CommentDTO } from "@/components/comments/comment-thread";
 import { listCommentsForTargets, listMentionableMembers } from "@/lib/comment-queries";
 import { getCurrentUser } from "@/lib/auth";
@@ -13,6 +23,8 @@ import { relationLabel } from "@/lib/layout/edges";
 import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
 import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/labels-fields";
 import { PersonTimelineSection } from "@/components/person-events";
+import { SourcesSection } from "@/components/sources-section";
+import type { SourceRef } from "@/components/source-picker";
 import { AskRelativesSection, type AskLinkItem } from "@/components/ask-relatives";
 import { askLinks } from "@/db/schema";
 import { SuggestEditForm, SuggestRelativeForm } from "@/components/suggest-forms";
@@ -171,6 +183,48 @@ export default async function PersonPage({
     revoked: l.revokedAt !== null,
   }));
 
+  // Sources & provenance (issue #37)
+  const [treeSources, personSourceRows, memorySourceRows, eventSourceRows] = await Promise.all([
+    db.select().from(sources).where(eq(sources.treeId, treeId)).orderBy(desc(sources.createdAt)),
+    db
+      .select({ sourceId: personSources.sourceId })
+      .from(personSources)
+      .where(eq(personSources.personId, personId)),
+    memoryRows.length
+      ? db
+          .select({ memoryId: memorySources.memoryId, sourceId: memorySources.sourceId })
+          .from(memorySources)
+          .innerJoin(memories, eq(memorySources.memoryId, memories.id))
+          .where(inArray(memorySources.memoryId, memoryRows.map((m) => m.id)))
+      : Promise.resolve([] as { memoryId: string; sourceId: string }[]),
+    eventRows.length
+      ? db
+          .select({ eventId: eventSources.eventId, sourceId: eventSources.sourceId })
+          .from(eventSources)
+          .where(inArray(eventSources.eventId, sortedEvents.map((e) => e.id)))
+      : Promise.resolve([] as { eventId: string; sourceId: string }[]),
+  ]);
+  const sourceById = new Map<string, SourceRef>(
+    treeSources.map((src) => [
+      src.id,
+      { id: src.id, title: src.title, citation: src.citation, url: src.url },
+    ]),
+  );
+  const allSourceRefs = [...sourceById.values()];
+  const personSourceRefs = personSourceRows
+    .map((r) => sourceById.get(r.sourceId))
+    .filter((x): x is SourceRef => !!x);
+  const sourcesByMemory: Record<string, SourceRef[]> = {};
+  for (const r of memorySourceRows) {
+    const ref = sourceById.get(r.sourceId);
+    if (ref) (sourcesByMemory[r.memoryId] ??= []).push(ref);
+  }
+  const sourcesByEvent: Record<string, SourceRef[]> = {};
+  for (const r of eventSourceRows) {
+    const ref = sourceById.get(r.sourceId);
+    if (ref) (sourcesByEvent[r.eventId] ??= []).push(ref);
+  }
+
   const mentionMembers = await listMentionableMembers(treeId);
   const memberLinks = Object.fromEntries(
     mentionMembers
@@ -321,6 +375,9 @@ export default async function PersonPage({
               return [m.id, lbs.map((l) => ({ id: l.id, name: l.name, color: l.color }))];
             }),
           )}
+          sourcesByMemory={sourcesByMemory}
+          allSources={allSourceRefs}
+          canSource={canEdit(role)}
           initialMemories={memoryRows.map((m) => ({
             id: m.id,
             kind: m.kind,
@@ -344,6 +401,18 @@ export default async function PersonPage({
           personId={personId}
           personName={name}
           events={sortedEvents}
+          canEdit={canEdit(role)}
+          sourcesByEvent={sourcesByEvent}
+          allSources={allSourceRefs}
+        />
+      </div>
+
+      <div className="mt-6">
+        <SourcesSection
+          treeId={treeId}
+          personId={personId}
+          sources={personSourceRefs}
+          allSources={allSourceRefs}
           canEdit={canEdit(role)}
         />
       </div>

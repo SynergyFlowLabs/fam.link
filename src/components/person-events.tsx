@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { SourceChips, SourcePicker, type SourceRef } from "@/components/source-picker";
 import {
   createPersonEventAction,
   deletePersonEventAction,
@@ -45,12 +46,18 @@ export function PersonTimelineSection({
   personName,
   events,
   canEdit,
+  sourcesByEvent = {},
+  allSources = [],
 }: {
   treeId: string;
   personId: string;
   personName: string;
   events: PersonEvent[];
   canEdit: boolean;
+  /** Attached citations per event id (issue #37). */
+  sourcesByEvent?: Record<string, SourceRef[]>;
+  /** The tree's full source list — editors attach from here. */
+  allSources?: SourceRef[];
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -125,6 +132,22 @@ export function PersonTimelineSection({
                       Source: {ev.source}
                     </p>
                   )}
+                  <SourceChips
+                    treeId={treeId}
+                    targetType="event"
+                    targetId={ev.id}
+                    sources={sourcesByEvent[ev.id] ?? []}
+                    canEdit={canEdit}
+                  />
+                  {canEdit ? (
+                    <SourcePicker
+                      treeId={treeId}
+                      targetType="event"
+                      targetId={ev.id}
+                      allSources={allSources}
+                      attachedIds={(sourcesByEvent[ev.id] ?? []).map((src) => src.id)}
+                    />
+                  ) : null}
                   {canEdit && (
                     <div className="mt-3 flex gap-2">
                       <button

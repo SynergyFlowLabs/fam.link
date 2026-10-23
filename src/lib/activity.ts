@@ -26,6 +26,7 @@ export const ACTIVITY_ACTIONS = [
   "suggest",
   "review_suggestion",
   "ask",
+  "source",
   "undo",
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
@@ -71,6 +72,8 @@ export function actionVerb(action: ActivityAction): string {
       return "reviewed a suggestion for";
     case "ask":
       return "asked a relative about";
+    case "source":
+      return "added a source for";
     case "undo":
       return "undid an action in";
   }
@@ -98,6 +101,8 @@ export interface ActivityDetail {
   suggestionApproved?: boolean;
   /** For ask entries: the question being sent out. */
   question?: string;
+  /** For source entries: the citation's title. */
+  sourceTitle?: string;
   [key: string]: unknown;
 }
 
@@ -174,6 +179,10 @@ export function describeActivity(action: ActivityAction, detail: ActivityDetail,
       return detail.question
         ? `asked a relative: “${detail.question}”`
         : `asked a relative about ${name}`;
+    case "source":
+      return detail.sourceTitle
+        ? `added a source for ${name}: “${detail.sourceTitle}”`
+        : `added a source for ${name}`;
     case "undo":
       return `undid: ${detail.undoneSummary ?? "an earlier change"}`;
   }

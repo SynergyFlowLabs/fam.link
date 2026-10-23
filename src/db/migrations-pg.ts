@@ -540,5 +540,60 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
     statements: [
       `ALTER TABLE "media" ADD COLUMN IF NOT EXISTS "duration_seconds" integer`,
     ],
+  },  {
+    // Sources & provenance (issue #37, P4.2)
+    name: "0011_sources",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "sources" (
+        "id" text PRIMARY KEY NOT NULL,
+        "tree_id" text NOT NULL,
+        "title" text NOT NULL,
+        "citation" text,
+        "url" text,
+        "created_by" text,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `DO $$ BEGIN
+        ALTER TABLE "sources" ADD CONSTRAINT "sources_tree_id_trees_id_fk" FOREIGN KEY ("tree_id") REFERENCES "trees"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+        ALTER TABLE "sources" ADD CONSTRAINT "sources_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+      EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+      `CREATE INDEX IF NOT EXISTS "sources_tree_idx" ON "sources" ("tree_id")`,
+      `CREATE TABLE IF NOT EXISTS "person_sources" (
+        "person_id" text NOT NULL,
+        "source_id" text NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "person_sources_person_id_source_id_pk" PRIMARY KEY ("person_id", "source_id")
+      )`,
+      `DO $$ BEGIN
+        ALTER TABLE "person_sources" ADD CONSTRAINT "person_sources_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "persons"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+        ALTER TABLE "person_sources" ADD CONSTRAINT "person_sources_source_id_sources_id_fk" FOREIGN KEY ("source_id") REFERENCES "sources"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+      EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+      `CREATE TABLE IF NOT EXISTS "memory_sources" (
+        "memory_id" text NOT NULL,
+        "source_id" text NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "memory_sources_memory_id_source_id_pk" PRIMARY KEY ("memory_id", "source_id")
+      )`,
+      `DO $$ BEGIN
+        ALTER TABLE "memory_sources" ADD CONSTRAINT "memory_sources_memory_id_memories_id_fk" FOREIGN KEY ("memory_id") REFERENCES "memories"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+        ALTER TABLE "memory_sources" ADD CONSTRAINT "memory_sources_source_id_sources_id_fk" FOREIGN KEY ("source_id") REFERENCES "sources"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+      EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+      `CREATE TABLE IF NOT EXISTS "event_sources" (
+        "event_id" text NOT NULL,
+        "source_id" text NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "event_sources_event_id_source_id_pk" PRIMARY KEY ("event_id", "source_id")
+      )`,
+      `DO $$ BEGIN
+        ALTER TABLE "event_sources" ADD CONSTRAINT "event_sources_event_id_person_events_id_fk" FOREIGN KEY ("event_id") REFERENCES "person_events"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+        ALTER TABLE "event_sources" ADD CONSTRAINT "event_sources_source_id_sources_id_fk" FOREIGN KEY ("source_id") REFERENCES "sources"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+      EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+      `ALTER TABLE "media" ADD COLUMN IF NOT EXISTS "source_type" text DEFAULT 'memory' NOT NULL`,
+      `ALTER TABLE "media" ADD COLUMN IF NOT EXISTS "provenance" text`,
+      `DO $$ BEGIN
+        ALTER TABLE "media" ADD CONSTRAINT "media_person_id_persons_id_fk" FOREIGN KEY ("person_id") REFERENCES "persons"("id") ON DELETE SET NULL ON UPDATE NO ACTION;
+      EXCEPTION WHEN duplicate_object THEN null; END $$;`,
+      `ALTER TABLE "media" ADD COLUMN IF NOT EXISTS "person_id" text`,
+    ],
   },
 ];

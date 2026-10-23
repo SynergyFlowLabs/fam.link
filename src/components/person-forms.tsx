@@ -15,6 +15,7 @@ import type { Person } from "@/db/schema";
 import { useToast } from "@/components/toaster";
 import { MemoryLabelsSection } from "@/components/labels-fields";
 import { VoiceRecorder } from "@/components/voice-recorder";
+import { SourceChips, SourcePicker, type SourceRef } from "@/components/source-picker";
 
 const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink-soft";
 
@@ -201,6 +202,9 @@ export function MemorySection({
   allLabelDefs = [],
   memoryLabelsMap = {},
   commentNodes = {},
+  sourcesByMemory = {},
+  allSources = [],
+  canSource = false,
 }: {
   treeId: string;
   personId: string;
@@ -215,6 +219,12 @@ export function MemorySection({
   memoryLabelsMap?: Record<string, { id: string; name: string; color: string | null }[]>;
   /** Server-rendered comment thread per memory id (issue #32). */
   commentNodes?: Record<string, ReactNode>;
+  /** Sources attached to each memory (issue #37). */
+  sourcesByMemory?: Record<string, SourceRef[]>;
+  /** The tree's full source list — editors attach from here. */
+  allSources?: SourceRef[];
+  /** Editor-and-up: may attach/detach sources (issue #37). */
+  canSource?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -360,6 +370,22 @@ export function MemorySection({
                   .filter(Boolean)
                   .join(" · ")}
               </p>
+              <SourceChips
+                treeId={treeId}
+                targetType="memory"
+                targetId={m.id}
+                sources={sourcesByMemory[m.id] ?? []}
+                canEdit={canSource}
+              />
+              {canSource ? (
+                <SourcePicker
+                  treeId={treeId}
+                  targetType="memory"
+                  targetId={m.id}
+                  allSources={allSources}
+                  attachedIds={(sourcesByMemory[m.id] ?? []).map((src) => src.id)}
+                />
+              ) : null}
               <MemoryLabelsSection
                 treeId={treeId}
                 memoryId={m.id}

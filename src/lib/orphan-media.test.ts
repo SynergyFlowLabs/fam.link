@@ -79,3 +79,17 @@ describe("pickStrayFiles", () => {
     ]);
   });
 });
+
+describe("collectReferencedMediaIds (documents, #37)", () => {
+  it("keeps standalone gallery documents referenced", () => {
+    const ids = collectReferencedMediaIds({
+      memoryMediaIds: [null, "mem-1"],
+      personPhotoIds: [undefined],
+      documentMediaIds: ["doc-1", null, "doc-2"],
+    });
+    assert.ok(ids.has("mem-1"));
+    assert.ok(ids.has("doc-1"));
+    assert.ok(ids.has("doc-2"));
+    assert.equal(ids.size, 3);
+  });
+});

@@ -12,6 +12,7 @@ import {
   undoAllowed,
   UNDO_MAX_ENTRIES,
   UNDO_WINDOW_MS,
+  actionVerb,
 } from "./activity.ts";
 
 const NOW = Date.parse("2026-03-20T15:00:00Z");
@@ -20,7 +21,7 @@ describe("activity", () => {
   it("isActivityAction guards the enum", () => {
     assert.ok(isActivityAction("add_person"));
     assert.equal(isActivityAction("nuke_tree"), false);
-    assert.equal(ACTIVITY_ACTIONS.length, 18);
+    assert.equal(ACTIVITY_ACTIONS.length, 19);
     assert.ok(isActivityAction("add_comment"));
     assert.ok(isActivityAction("delete_comment"));
   });
@@ -47,6 +48,18 @@ describe("activity", () => {
       "asked a relative: “What do you remember about Nana's kitchen?”",
     );
     assert.equal(describeActivity("ask", {}, null), "asked a relative about someone");
+  });
+
+  it("describe source entries", () => {
+    assert.equal(
+      describeActivity("source", { personName: "Farida Begum", sourceTitle: "Interview, Oct 2026" }, null),
+      'added a source for Farida Begum: “Interview, Oct 2026”',
+    );
+    assert.equal(
+      describeActivity("source", { personName: "Farida Begum" }, null),
+      "added a source for Farida Begum",
+    );
+    assert.equal(actionVerb("source"), "added a source for");
   });
 
   it("parseDetail tolerates garbage", () => {

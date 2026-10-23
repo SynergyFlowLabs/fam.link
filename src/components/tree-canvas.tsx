@@ -80,6 +80,8 @@ interface Props {
   mapHref?: string | null;
   /** Link to the activity feed — rendered as a header pill when set. */
   activityHref?: string | null;
+  /** Link to the media gallery — rendered as a header pill when set (issue #37). */
+  galleryHref?: string | null;
   /** Small note under the title for invited members (e.g. their role). */
   memberNote?: string | null;
   /** Extra header controls (owner view: Share + Members). */
@@ -124,6 +126,7 @@ export function TreeCanvas({
   timelineHref = null,
   mapHref = null,
   activityHref = null,
+  galleryHref = null,
   memberNote = null,
   headerExtra = null,
   importHref = null,
@@ -614,6 +617,14 @@ export function TreeCanvas({
               className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
             >
               Map
+            </a>
+          )}
+          {galleryHref && (
+            <a
+              href={galleryHref}
+              className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
+            >
+              Gallery
             </a>
           )}
           {activityHref && (
