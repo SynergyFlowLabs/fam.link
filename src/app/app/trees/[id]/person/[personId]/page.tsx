@@ -15,6 +15,7 @@ import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/lab
 import { PersonTimelineSection } from "@/components/person-events";
 import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
 import { sortEvents } from "@/lib/person-events";
+import { filterDefsForViewer } from "@/lib/custom-fields";
 
 export default async function PersonPage({
   params,
@@ -114,8 +115,16 @@ export default async function PersonPage({
 
   const personLabels = await getPersonLabels(personId);
   const allLabelDefs = await listLabelDefs(treeId);
-  const fieldDefs = await listCustomFieldDefs(treeId);
-  const personFieldValues = await getPersonCustomValues(personId);
+  const fieldDefsAll = await listCustomFieldDefs(treeId);
+  const personFieldValuesAll = await getPersonCustomValues(personId);
+  // Private fields: owner only (issue #33) — hidden values, not just
+  // hidden inputs.
+  const isOwner = role === "owner";
+  const fieldDefs = filterDefsForViewer(fieldDefsAll, isOwner);
+  const visibleDefIds = new Set(fieldDefs.map((f) => f.id));
+  const personFieldValues = personFieldValuesAll.filter((v) =>
+    visibleDefIds.has(v.fieldId),
+  );
   const memoryLabelsMap = await getMemoryLabelsByTree(treeId);
 
   // Discussion threads: on the person + on each of their memories (issue #32).

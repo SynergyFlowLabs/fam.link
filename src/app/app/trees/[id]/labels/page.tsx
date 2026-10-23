@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canEdit } from "@/lib/roles";
 import { listLabelDefs, listCustomFieldDefs } from "@/lib/tree-labels";
+import { filterDefsForViewer } from "@/lib/custom-fields";
 import { LabelsFieldsManager } from "@/components/labels-fields-manager";
 
 export default async function LabelsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +17,8 @@ export default async function LabelsPage({ params }: { params: Promise<{ id: str
   const editable = canEdit(role);
 
   const labelDefs = await listLabelDefs(treeId);
-  const fieldDefs = await listCustomFieldDefs(treeId);
+  // Private fields show only for the owner (issue #33).
+  const fieldDefs = filterDefsForViewer(await listCustomFieldDefs(treeId), role === "owner");
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -36,7 +38,8 @@ export default async function LabelsPage({ params }: { params: Promise<{ id: str
         <LabelsFieldsManager
           treeId={treeId}
           initialLabels={labelDefs.map((l) => ({ id: l.id, name: l.name, color: l.color }))}
-          initialFields={fieldDefs.map((f) => ({ id: f.id, name: f.name, kind: f.kind as string, optionsJson: f.optionsJson }))}
+          initialFields={fieldDefs.map((f) => ({ id: f.id, name: f.name, kind: f.kind as string, optionsJson: f.optionsJson, visibility: f.visibility }))}
+          isOwner={role === "owner"}
           canEdit={editable}
         />
       </div>

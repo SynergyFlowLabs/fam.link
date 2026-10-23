@@ -18,6 +18,7 @@ import {
 } from "@/db/schema";
 import { writeGedcom } from "@/lib/gedcom/writer";
 import { getPublicTree } from "@/lib/public-trees";
+import { filterDefsForViewer } from "@/lib/custom-fields";
 import { REDACTED_NAME } from "@/lib/canvas-types";
 import type { Person } from "@/db/schema";
 
@@ -77,7 +78,7 @@ export async function GET(
     .innerJoin(persons, eq(memories.personId, persons.id))
     .where(eq(persons.treeId, treeId));
   if (branchIds) {
-    memoryRows = memoryRows.filter((m: any) => branchIds!.has(m.persons.id));
+    memoryRows = memoryRows.filter((m) => branchIds!.has(m.persons.id));
   }
   const mediaRows = await db
     .select()
@@ -86,7 +87,14 @@ export async function GET(
 
   // Labels & custom fields for this tree (for JSON export and GEDCOM notes)
   const labelDefsRows = await db.select().from(labelDefs).where(eq(labelDefs.treeId, treeId));
-  const customFieldDefsRows = await db.select().from(customFieldDefs).where(eq(customFieldDefs.treeId, treeId));
+  // Private custom fields export only for the owner — never in member or
+  // public/anon exports (issue #33).
+  const isOwnerExport = access?.role === "owner";
+  const customFieldDefsRows = filterDefsForViewer(
+    await db.select().from(customFieldDefs).where(eq(customFieldDefs.treeId, treeId)),
+    isOwnerExport,
+  );
+  const exportDefIds = new Set(customFieldDefsRows.map((f) => f.id));
   const personLabelsRows = personRows.length > 0
     ? await db.select().from(personLabels).where(inArray(personLabels.personId, personRows.map((p) => p.id)))
     : [];
@@ -128,13 +136,16 @@ export async function GET(
     // Labels/custom fields of living relatives stay private too
     personLabelsRows.splice(0, personLabelsRows.length, ...personLabelsRows.filter((r) => !livingIds.has(r.personId)));
     personCustomValuesRows.splice(0, personCustomValuesRows.length, ...personCustomValuesRows.filter((r) => !livingIds.has(r.personId)));
-    {
-      const remainingMemoryIds = new Set(memoryRows.map((m) => m.memories.id));
-      memoryLabelsRows.splice(0, memoryLabelsRows.length, ...memoryLabelsRows.filter((r) => remainingMemoryIds.has(r.memoryId)));
-      memoryCustomValuesRows.splice(0, memoryCustomValuesRows.length, ...memoryCustomValuesRows.filter((r) => remainingMemoryIds.has(r.memoryId)));
-    }
+    const remainingMemoryIds = new Set(memoryRows.map((m) => m.memories.id));
+    memoryLabelsRows.splice(0, memoryLabelsRows.length, ...memoryLabelsRows.filter((r) => remainingMemoryIds.has(r.memoryId)));
+    memoryCustomValuesRows.splice(0, memoryCustomValuesRows.length, ...memoryCustomValuesRows.filter((r) => remainingMemoryIds.has(r.memoryId)));
     // Life events of living relatives are private too
     eventRows.splice(0, eventRows.length, ...eventRows.filter((r) => !livingIds.has(r.personId)));
+  }
+  // Private custom fields never export for non-owners (issue #33).
+  if (!isOwnerExport) {
+    personCustomValuesRows.splice(0, personCustomValuesRows.length, ...personCustomValuesRows.filter((r) => exportDefIds.has(r.fieldId)));
+    memoryCustomValuesRows.splice(0, memoryCustomValuesRows.length, ...memoryCustomValuesRows.filter((r) => exportDefIds.has(r.fieldId)));
   }
 
   const safeName =

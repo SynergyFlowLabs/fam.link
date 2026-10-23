@@ -466,6 +466,10 @@ export const customFieldDefs = sqliteTable(
       enum: ["text", "number", "date", "select"],
     }).notNull(),
     optionsJson: text("options_json"),
+    // "shared" = every member sees it; "private" = owner only (issue #33).
+    visibility: text("visibility", { enum: ["shared", "private"] })
+      .notNull()
+      .default("shared"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

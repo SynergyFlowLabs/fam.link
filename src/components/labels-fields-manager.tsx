@@ -18,17 +18,20 @@ export function LabelsFieldsManager({
   treeId,
   initialLabels,
   initialFields,
+  isOwner,
   canEdit,
 }: {
   treeId: string;
   initialLabels: { id: string; name: string; color: string | null }[];
-  initialFields: { id: string; name: string; kind: string; optionsJson: string | null }[];
+  initialFields: { id: string; name: string; kind: string; optionsJson: string | null; visibility: "shared" | "private" }[];
+  /** Only the owner can see/change private-field visibility (issue #33). */
+  isOwner: boolean;
   canEdit: boolean;
 }) {
   return (
     <div className="space-y-6">
       <LabelsManager treeId={treeId} labels={initialLabels} canEdit={canEdit} />
-      <CustomFieldsManager treeId={treeId} fields={initialFields} canEdit={canEdit} />
+      <CustomFieldsManager treeId={treeId} fields={initialFields} isOwner={isOwner} canEdit={canEdit} />
     </div>
   );
 }
@@ -224,10 +227,13 @@ function LabelsManager({
 function CustomFieldsManager({
   treeId,
   fields,
+  isOwner,
   canEdit,
 }: {
   treeId: string;
-  fields: { id: string; name: string; kind: string; optionsJson: string | null }[];
+  fields: { id: string; name: string; kind: string; optionsJson: string | null; visibility: "shared" | "private" }[];
+  /** Only the owner can see private fields or change visibility (issue #33). */
+  isOwner: boolean;
   canEdit: boolean;
 }) {
   const [pending, startTransition] = useTransition();
@@ -235,10 +241,12 @@ function CustomFieldsManager({
   const [name, setName] = useState("");
   const [kind, setKind] = useState("text");
   const [options, setOptions] = useState("");
+  const [visibility, setVisibility] = useState<"shared" | "private">("shared");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editKind, setEditKind] = useState("text");
   const [editOptions, setEditOptions] = useState("");
+  const [editVisibility, setEditVisibility] = useState<"shared" | "private">("shared");
 
   const create = () => {
     const fd = new FormData();
@@ -246,6 +254,7 @@ function CustomFieldsManager({
     fd.set("name", name);
     fd.set("kind", kind);
     fd.set("options", options);
+    if (isOwner) fd.set("visibility", visibility);
     startTransition(async () => {
       try {
         const res = await createCustomFieldDefAction(fd);
@@ -283,6 +292,7 @@ function CustomFieldsManager({
     fd.set("name", editName);
     fd.set("kind", editKind);
     fd.set("options", editOptions);
+    if (isOwner) fd.set("visibility", editVisibility);
     startTransition(async () => {
       try {
         const res = await updateCustomFieldDefAction(fd);
@@ -334,6 +344,17 @@ function CustomFieldsManager({
                         placeholder="Options: Farmer, Teacher, ..."
                       />
                     )}
+                    {isOwner && (
+                      <select
+                        value={editVisibility}
+                        onChange={(e) => setEditVisibility(e.target.value as "shared" | "private")}
+                        className="input w-28"
+                        title="Private — only you (the owner) can see this field"
+                      >
+                        <option value="shared">Shared</option>
+                        <option value="private">🔒 Private</option>
+                      </select>
+                    )}
                     <button type="button" disabled={pending} onClick={() => saveEdit(f.id)} className="btn-primary px-3 py-1 text-xs">
                       Save
                     </button>
@@ -347,6 +368,14 @@ function CustomFieldsManager({
                       <span className="text-sm font-medium text-ink">{f.name}</span>{" "}
                       <span className="text-xs text-ink-soft">· {f.kind}</span>
                       {opts && <span className="text-xs text-ink-soft"> · {opts.join(", ")}</span>}
+                      {f.visibility === "private" && (
+                        <span
+                          className="ml-2 rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-medium text-gold"
+                          title="Private — only you (the owner) can see this field"
+                        >
+                          🔒 Private
+                        </span>
+                      )}
                     </div>
                     {canEdit && (
                       <div className="flex gap-1.5">
@@ -357,6 +386,7 @@ function CustomFieldsManager({
                             setEditName(f.name);
                             setEditKind(f.kind);
                             setEditOptions(opts ? opts.join(", ") : "");
+                            setEditVisibility(f.visibility ?? "shared");
                           }}
                           className="rounded border border-line px-2 py-1 text-xs hover:border-evergreen hover:text-evergreen"
                         >
@@ -407,6 +437,17 @@ function CustomFieldsManager({
                 className="input flex-1"
               />
             )}
+            {isOwner && (
+              <select
+                value={visibility}
+                onChange={(e) => setVisibility(e.target.value as "shared" | "private")}
+                className="input w-36"
+                title="Private — only you (the owner) can see this field"
+              >
+                <option value="shared">Shared with tree</option>
+                <option value="private">🔒 Private (owner only)</option>
+              </select>
+            )}
             <button
               type="button"
               disabled={pending || !name.trim()}
@@ -416,7 +457,10 @@ function CustomFieldsManager({
               Add field
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-ink-soft">Text = free writing, number = counts/years, date = fuzzy dates too (“c. 1947”), select = pick from a list.</p>
+          <p className="mt-1 text-[11px] text-ink-soft">
+            Text = free writing, number = counts/years, date = fuzzy dates too (“c. 1947”), select = pick from a list.
+            {isOwner && " Private fields are visible only to you — never to other members, share links, or exports."}
+          </p>
         </div>
       )}
     </section>

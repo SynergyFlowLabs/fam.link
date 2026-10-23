@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { count, eq } from "drizzle-orm";
 import { getPersonCustomValuesByTree, getPersonLabelsByTree, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
+import { filterDefsForViewer } from "@/lib/custom-fields";
 import { db } from "@/db";
 import { memories, parentChild, persons, unions } from "@/db/schema";
 import { getPublicTree } from "@/lib/public-trees";
@@ -59,13 +60,15 @@ export default async function ExploreTreePage({
     .groupBy(memories.personId);
   const memoryCounts = new Map(memoryRows.map((r) => [r.personId, Number(r.c)]));
   const labelDefs = await listLabelDefs(treeId);
-  const fieldDefs = await listCustomFieldDefs(treeId);
+  // Public viewers are never the owner — private fields never show (issue #33).
+  const fieldDefs = filterDefsForViewer(await listCustomFieldDefs(treeId), false);
+  const exploreDefIds = new Set(fieldDefs.map((f) => f.id));
   const labelsByPerson = await getPersonLabelsByTree(treeId);
   const customByPerson = await getPersonCustomValuesByTree(treeId);
 
   const canvasPersons: CanvasPerson[] = peopleRows.map((p) => {
     const lbs = labelsByPerson.get(p.id) ?? [];
-    const cvs = customByPerson.get(p.id) ?? [];
+    const cvs = (customByPerson.get(p.id) ?? []).filter((c) => exploreDefIds.has(c.fieldId));
     return redactPerson({
       id: p.id,
       firstName: p.firstName,

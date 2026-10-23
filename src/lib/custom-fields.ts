@@ -143,3 +143,40 @@ export function parseStoredOptions(json: string | null): string[] | null {
     return null;
   }
 }
+
+// ---------- per-field visibility (issue #33) ----------
+
+export type FieldVisibility = "shared" | "private";
+
+export const FIELD_VISIBILITIES: readonly FieldVisibility[] = [
+  "shared",
+  "private",
+] as const;
+
+/** Type guard for form/URL-supplied visibility values. */
+export function isFieldVisibility(v: unknown): v is FieldVisibility {
+  return typeof v === "string" && (FIELD_VISIBILITIES as readonly string[]).includes(v);
+}
+
+/**
+ * Only the tree owner sees private fields — every other role (and every
+ * share/public context, where there is no owner session) sees none.
+ */
+export function canSeeField(
+  visibility: FieldVisibility | null | undefined,
+  isOwner: boolean,
+): boolean {
+  return isOwner || (visibility ?? "shared") !== "private";
+}
+
+/**
+ * Filter a list of field defs (or anything carrying `visibility`) down to
+ * what this viewer may see. Rows written before #33 have no visibility —
+ * they default to shared.
+ */
+export function filterDefsForViewer<T extends { visibility?: FieldVisibility | null }>(
+  defs: T[],
+  isOwner: boolean,
+): T[] {
+  return isOwner ? defs : defs.filter((d) => canSeeField(d.visibility, false));
+}
