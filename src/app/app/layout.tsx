@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { recentUnresolvedComments } from "@/lib/comment-queries";
+import { mentionCountFor } from "@/lib/comments";
 import { Logo } from "@/components/logo";
 import { SignOutButton } from "@/components/sign-out-button";
 import { ToastProvider } from "@/components/toaster";
@@ -12,6 +14,13 @@ export default async function AppLayout({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
+
+  // Header badge: unresolved comments that @mention me, across my trees.
+  const mentionRows = await recentUnresolvedComments(user.id);
+  const mentionCount = mentionCountFor(mentionRows, {
+    userId: user.id,
+    name: user.name,
+  });
 
   const initials = user.name
     .split(/\s+/)
@@ -43,6 +52,14 @@ export default async function AppLayout({
             </Link>
           </div>
           <div className="flex items-center gap-3 text-sm">
+            {mentionCount > 0 && (
+              <span
+                className="flex h-6 items-center justify-center rounded-full bg-gold/20 px-2 text-xs font-semibold text-gold"
+                title={`You were mentioned in ${mentionCount} unresolved ${mentionCount === 1 ? "comment" : "comments"}`}
+              >
+                @{mentionCount}
+              </span>
+            )}
             <span
               className="flex h-7 w-7 items-center justify-center rounded-full bg-evergreen-mist font-display text-xs font-semibold text-evergreen-deep"
               title={user.email}

@@ -491,6 +491,9 @@ export const activityFeed = pgTable(
         "delete_event",
         "invite",
         "share",
+        "add_comment",
+        "delete_comment",
+        "resolve_comment",
         "undo",
       ],
     }).notNull(),
@@ -519,6 +522,42 @@ export type PgMemoryCustomValue = typeof memoryCustomValues.$inferSelect;
 export type PgPersonEvent = typeof personEvents.$inferSelect;
 export type PgPlaceGeocode = typeof placeGeocodes.$inferSelect;
 export type PgActivityFeed = typeof activityFeed.$inferSelect;
+
+/**
+ * Comment threads on a person or a memory. Mirrors schema.ts comments
+ * exactly (schema-parity.test.ts). parent_id is a logical self-reference
+ * (no FK) — integrity is enforced in src/actions/comments.ts.
+ */
+export const comments = pgTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    targetType: text("target_type", { enum: ["person", "memory"] }).notNull(),
+    targetId: text("target_id").notNull(),
+    authorUserId: text("author_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    authorName: text("author_name").notNull(),
+    body: text("body").notNull(),
+    parentId: text("parent_id"),
+    resolved: boolean("resolved").notNull().default(false),
+    resolvedByUserId: text("resolved_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    resolvedByName: text("resolved_by_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("comments_target_idx").on(t.targetType, t.targetId),
+    index("comments_tree_created_idx").on(t.treeId, t.createdAt),
+  ],
+);
+
+export type PgComment = typeof comments.$inferSelect;
 
 
 export type PgUser = typeof users.$inferSelect;

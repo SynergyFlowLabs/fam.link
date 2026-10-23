@@ -20,6 +20,9 @@ export const ACTIVITY_ACTIONS = [
   "delete_event",
   "invite",
   "share",
+  "add_comment",
+  "delete_comment",
+  "resolve_comment",
   "undo",
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
@@ -53,6 +56,12 @@ export function actionVerb(action: ActivityAction): string {
       return "invited someone to";
     case "share":
       return "shared a read-only link for";
+    case "add_comment":
+      return "commented on";
+    case "delete_comment":
+      return "removed a comment on";
+    case "resolve_comment":
+      return "settled a discussion on";
     case "undo":
       return "undid an action in";
   }
@@ -70,6 +79,11 @@ export interface ActivityDetail {
   changed?: string[];
   /** For undo entries: what was undone. */
   undoneSummary?: string;
+  /** For comment entries: the discussion is about a memory, not a person. */
+  memory?: boolean;
+  commentId?: string;
+  /** For resolve_comment: true = resolved, false = reopened. */
+  threadResolved?: boolean;
   [key: string]: unknown;
 }
 
@@ -130,6 +144,12 @@ export function describeActivity(action: ActivityAction, detail: ActivityDetail,
       return `invited a ${relationPhrase(detail.relation)} to the tree${detail.personName ? ` (${detail.personName})` : ""}`;
     case "share":
       return `created a share link${detail.personName ? ` for ${detail.personName}` : ""}`;
+    case "add_comment":
+      return `commented on ${detail.memory ? `a memory of ${name}` : name}`;
+    case "delete_comment":
+      return `removed a comment on ${detail.memory ? `a memory of ${name}` : name}`;
+    case "resolve_comment":
+      return `${detail.threadResolved ? "resolved" : "reopened"} the discussion on ${detail.memory ? `a memory of ${name}` : name}`;
     case "undo":
       return `undid: ${detail.undoneSummary ?? "an earlier change"}`;
   }

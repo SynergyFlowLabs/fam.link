@@ -8,6 +8,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { db, DATA_DIR } from "@/db";
 import {
+  comments,
   media,
   memories,
   parentChild,
@@ -33,15 +34,10 @@ import {
 import { displayNameOf, parsePersonFields } from "@/lib/person-fields";
 import { OK, fail, type ActionResult } from "@/lib/action-result";
 import { logActivity } from "@/lib/activity-log";
+import { actorNameOf } from "@/lib/actors";
 import type { PersonFields } from "@/lib/person-fields";
 
 /** Actor display name for feed rows. */
-async function actorNameOf(userId: string): Promise<string> {
-  const { users } = await import("@/db/schema");
-  const rows = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
-  return rows[0]?.name ?? "Someone";
-}
-
 function changedGroups(prev: PersonFields, next: PersonFields): string[] {
   const changed: string[] = [];
   if ((prev.firstName ?? "") !== (next.firstName ?? "") || (prev.lastName ?? "") !== (next.lastName ?? "")) changed.push("name");
@@ -292,6 +288,11 @@ export async function deletePersonAction(formData: FormData): Promise<void> {
       .where(eq(trees.id, treeId));
   }
 
+  // Discussion threads on this person go with them (issue #32).
+  await db
+    .delete(comments)
+    .where(and(eq(comments.targetType, "person"), eq(comments.targetId, personId)));
+
   // Person deletion cascades their memories — any photo files those
   // memories owned are now orphans. Sweep them (rows + files).
   await sweepTreeMedia(treeId);
@@ -448,6 +449,10 @@ export async function deleteMemoryAction(
   const memoryPersonName = await personNameById(treeId, targetPersonId);
 
   await db.delete(memories).where(eq(memories.id, memoryId));
+  // Discussion threads on this memory go with it (issue #32).
+  await db
+    .delete(comments)
+    .where(and(eq(comments.targetType, "memory"), eq(comments.targetId, memoryId)));
   // The memory's photo (if any) is now unreferenced — remove row + file.
   await sweepTreeMedia(treeId);
   await touchTree(treeId);

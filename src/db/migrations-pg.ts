@@ -464,5 +464,39 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
            FOREIGN KEY ("scope_person_id") REFERENCES "persons"("id") ON DELETE set null;
        EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
     ],
+  },  {
+    // Comment threads on persons & memories (issue #32, P3.2)
+    name: "0007_comments",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "comments" (
+         "id" text PRIMARY KEY NOT NULL,
+         "tree_id" text NOT NULL,
+         "target_type" text NOT NULL,
+         "target_id" text NOT NULL,
+         "author_user_id" text,
+         "author_name" text NOT NULL,
+         "body" text NOT NULL,
+         "parent_id" text,
+         "resolved" boolean DEFAULT false NOT NULL,
+         "resolved_by_user_id" text,
+         "resolved_by_name" text,
+         "created_at" timestamp DEFAULT now() NOT NULL,
+         "updated_at" timestamp DEFAULT now() NOT NULL
+       )`,
+      `DO $$ BEGIN
+         ALTER TABLE "comments" ADD CONSTRAINT "comments_tree_id_trees_id_fk"
+           FOREIGN KEY ("tree_id") REFERENCES "trees"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "comments" ADD CONSTRAINT "comments_author_user_id_users_id_fk"
+           FOREIGN KEY ("author_user_id") REFERENCES "users"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "comments" ADD CONSTRAINT "comments_resolved_by_user_id_users_id_fk"
+           FOREIGN KEY ("resolved_by_user_id") REFERENCES "users"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `CREATE INDEX IF NOT EXISTS "comments_target_idx" ON "comments" ("target_type","target_id")`,
+      `CREATE INDEX IF NOT EXISTS "comments_tree_created_idx" ON "comments" ("tree_id","created_at")`,
+    ],
   },
 ];

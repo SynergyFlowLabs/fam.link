@@ -20,7 +20,9 @@ describe("activity", () => {
   it("isActivityAction guards the enum", () => {
     assert.ok(isActivityAction("add_person"));
     assert.equal(isActivityAction("nuke_tree"), false);
-    assert.equal(ACTIVITY_ACTIONS.length, 12);
+    assert.equal(ACTIVITY_ACTIONS.length, 15);
+    assert.ok(isActivityAction("add_comment"));
+    assert.ok(isActivityAction("delete_comment"));
   });
 
   it("describeActivity builds warm plain-English sentences", () => {
@@ -32,6 +34,11 @@ describe("activity", () => {
     assert.equal(describeActivity("update_person", { personName: "A", changed: ["dates"] }, null), "updated A (dates)");
     assert.equal(describeActivity("add_memory", { personName: "B" }, null), "added a memory for B");
     assert.equal(describeActivity("undo", { undoneSummary: "added a memory for B" }, null), "undid: added a memory for B");
+    assert.equal(describeActivity("add_comment", { personName: "Ahmed Raza" }, null), "commented on Ahmed Raza");
+    assert.equal(describeActivity("add_comment", { personName: "Ahmed Raza", memory: true }, null), "commented on a memory of Ahmed Raza");
+    assert.equal(describeActivity("delete_comment", { personName: "B", memory: true }, null), "removed a comment on a memory of B");
+    assert.equal(describeActivity("resolve_comment", { personName: "Ahmed Raza", threadResolved: true }, null), "resolved the discussion on Ahmed Raza");
+    assert.equal(describeActivity("resolve_comment", { personName: "B", memory: true, threadResolved: false }, null), "reopened the discussion on a memory of B");
   });
 
   it("parseDetail tolerates garbage", () => {
