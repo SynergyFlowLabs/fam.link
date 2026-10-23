@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { QuickAddModal, type Relation } from "@/components/quick-add-modal";
 import {
@@ -13,6 +14,7 @@ import {
 import type { Person } from "@/db/schema";
 import { useToast } from "@/components/toaster";
 import { MemoryLabelsSection } from "@/components/labels-fields";
+import { VoiceRecorder } from "@/components/voice-recorder";
 
 const labelClass = "flex flex-col gap-1 text-xs font-medium text-ink-soft";
 
@@ -217,6 +219,8 @@ export function MemorySection({
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  const router = useRouter();
+  const refreshMemories = () => startTransition(() => router.refresh());
 
   return (
     <section className="rounded-2xl border border-line bg-card p-5">
@@ -230,6 +234,17 @@ export function MemorySection({
         The story layer — what {personName} was like, not just when they were
         born.
       </p>
+
+      {canAdd ? (
+        <div className="mt-4">
+          <VoiceRecorder
+            treeId={treeId}
+            personId={personId}
+            personName={personName}
+            onSaved={refreshMemories}
+          />
+        </div>
+      ) : null}
 
       {canAdd ? (
       <form
@@ -319,6 +334,19 @@ export function MemorySection({
                   alt={m.body || `A photo remembered with ${personName}`}
                   className="mb-2 max-h-72 w-auto rounded-lg border border-line"
                 />
+              )}
+              {m.kind === "voice" && m.mediaId && (
+                <div className="mb-2 max-w-md">
+                  <audio
+                    controls
+                    preload="none"
+                    src={`/api/media/${m.mediaId}`}
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-[11px] text-ink-soft">
+                    🎙 Voice memory — press play to listen
+                  </p>
+                </div>
               )}
               {m.body && (
                 <p className="text-sm leading-relaxed text-ink">{m.body}</p>

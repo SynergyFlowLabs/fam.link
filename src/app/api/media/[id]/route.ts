@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { open, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { and, eq } from "drizzle-orm";
 import { db, DATA_DIR } from "@/db";
@@ -62,12 +62,50 @@ export async function GET(
   if (!allowed) return new Response("Not found", { status: 404 });
 
   try {
-    const file = await readFile(
-      path.join(DATA_DIR, row.media.path),
-    );
+    // Audio players (voice memories) send Range requests so listeners can
+    // seek within a recording; answer single-range GETs with 206 slices.
+    const filePath = path.join(DATA_DIR, row.media.path);
+    const range = req.headers.get("range");
+    const match = range ? /^bytes=(\d*)-(\d*)$/.exec(range.trim()) : null;
+    if (match) {
+      const total = (await stat(filePath)).size;
+      let start: number;
+      let end: number;
+      if (match[1] === "" && match[2] !== "") {
+        // suffix range: last N bytes
+        start = Math.max(0, total - Number(match[2]));
+        end = total - 1;
+      } else {
+        start = match[1] === "" ? 0 : Number(match[1]);
+        end = match[2] === "" ? total - 1 : Math.min(Number(match[2]), total - 1);
+      }
+      if (start <= end && start < total) {
+        const length = end - start + 1;
+        const fh = await open(filePath, "r");
+        try {
+          const buffer = Buffer.alloc(length);
+          await fh.read(buffer, 0, length, start);
+          return new Response(new Uint8Array(buffer), {
+            status: 206,
+            headers: {
+              "Content-Type": row.media.mimeType,
+              "Content-Length": String(length),
+              "Content-Range": `bytes ${start}-${end}/${total}`,
+              "Accept-Ranges": "bytes",
+              "Cache-Control": "private, max-age=3600",
+            },
+          });
+        } finally {
+          await fh.close();
+        }
+      }
+    }
+
+    const file = await readFile(filePath);
     return new Response(new Uint8Array(file), {
       headers: {
         "Content-Type": row.media.mimeType,
+        "Accept-Ranges": "bytes",
         "Cache-Control": "private, max-age=3600",
       },
     });

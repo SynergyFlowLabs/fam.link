@@ -175,6 +175,8 @@ export const media = sqliteTable(
     path: text("path").notNull(), // relative under data/uploads/
     mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
+    // Audio clips only (voice memories, issue #36) — seconds, rounded.
+    durationSeconds: integer("duration_seconds"),
     uploadedBy: text("uploaded_by").references(() => users.id, {
       onDelete: "set null",
     }),
