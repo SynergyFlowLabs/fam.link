@@ -25,7 +25,11 @@ import { relationLabel, relationStrokeProps } from "@/lib/layout/edges";
 import type { RelationKind } from "@/lib/canvas-types";
 import { setFocusPersonAction } from "@/actions/persons";
 import { buildCollapseGraph, getDescendantBranchIds, branchCount, getVisibleIds, isInViewport, collapsedAncestorsOf } from "@/lib/collapse-store";
+import { useRouter } from "next/navigation";
 import { QuickAddModal, type Relation } from "./quick-add-modal";
+import { stepFocus, siblingsAtGeneration, CANVAS_SHORTCUTS } from "@/lib/keyboard-nav";
+import { useToast } from "@/components/toaster";
+import { CanvasMinimap } from "@/components/minimap";
 
 /** Clamp a view rectangle so it always overlaps the content bounds —
  *  panning can never push the tree entirely out of sight. */
@@ -93,6 +97,10 @@ interface Props {
 }
 
 const MIN_W = 360;
+/** Viewport width that counts as "readable" (focusView target) — the zoom
+ *  indicator's 100%. Below 60% labels get too small to read. */
+const READABLE_W = 1500;
+const MINIMAP_MIN_NODES = 20;
 const COMPACT_W = 120;
 const COMPACT_H = 52;
 function layoutDims(compact: boolean) {
@@ -270,6 +278,19 @@ export function TreeCanvas({
   const [modal, setModal] = useState<{ anchorId: string; relation: Relation } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [aspect, setAspect] = useState(0.6);
+  const toast = useToast();
+  const router = useRouter();
+  // Minimap is a desktop affordance — pointer-precision + screen real estate.
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    try {
+      const mq = window.matchMedia("(min-width: 768px)");
+      const update = () => setIsDesktop(mq.matches);
+      update();
+      mq.addEventListener("change", update);
+      return () => mq.removeEventListener("change", update);
+    } catch {}
+  }, []);
 
   const clampView = useCallback(
     (x: number, y: number, w: number): View =>
@@ -449,6 +470,10 @@ export function TreeCanvas({
     return `Gen ${g}`;
   };
   const totalMemories = visiblePersons.reduce((s, p) => s + p.memoryCount, 0);
+  // Zoom indicator (Cambridge Intelligence): at <60% of the readable width,
+  // labels are too small to read — say so instead of rendering noise.
+  const zoomPct = Math.round((READABLE_W / Math.max(view.w, 1)) * 100);
+  const showZoomHint = zoomPct < 60;
   const visibleCount = visiblePersons.length;
   const hiddenCount = persons.length - visibleCount;
   const focusPerson = personById.get(focusPersonId);
@@ -694,7 +719,7 @@ export function TreeCanvas({
       <div ref={wrapRef} className="relative min-h-0 flex-1">
         <svg
           ref={svgRef}
-          className="h-full w-full touch-none select-none"
+          className="h-full w-full touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-evergreen"
           viewBox={`${view.x} ${view.y} ${view.w} ${view.w * aspect}`}
           preserveAspectRatio="xMidYMid meet"
           onPointerDown={onPointerDown}
@@ -706,30 +731,49 @@ export function TreeCanvas({
           aria-label={`Family tree: ${treeName}`}
           tabIndex={0}
           onKeyDown={(e) => {
+            const navNodes = layout.nodes;
             if (e.key === "*" && hoverId) {
-              // expand all siblings at same generation as hovered
-              const hoverGen = layout.nodes.find((x) => x.id === hoverId)?.generation;
+              // expand all branches at the hovered person's generation
+              const hoverGen = navNodes.find((x) => x.id === hoverId)?.generation;
               if (hoverGen !== undefined) {
-                const siblingsAtGen = layout.nodes.filter((x) => x.generation === hoverGen).map((x) => x.id);
-                let changed = false;
+                const siblings = siblingsAtGeneration(navNodes, hoverGen);
                 setCollapsedIds((prev) => {
                   const next = new Set(prev);
-                  for (const sid of siblingsAtGen) {
+                  let changed = false;
+                  for (const sid of siblings) {
                     if (next.has(sid)) { next.delete(sid); changed = true; }
                   }
                   return changed ? next : prev;
                 });
               }
+              return;
+            }
+            if (e.key === "Enter" && hoverId) {
+              // keyboard "open" — same affordance as clicking the card link
+              const hp = personById.get(hoverId);
+              if (hp && !readOnly && hp.redacted !== true) {
+                e.preventDefault();
+                router.push(`${personBase}/person/${hoverId}`);
+              }
+              return;
+            }
+            if (e.key === "?") {
+              e.preventDefault();
+              toast.info(
+                "Canvas shortcuts",
+                CANVAS_SHORTCUTS.map((sc) => `${sc.keys} — ${sc.action}`).join(" · "),
+              );
+              return;
+            }
+            if (e.key === "f" || e.key === "F") {
+              fit();
+              return;
             }
             if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
-              const visibleOrder = layout.nodes.map((x) => x.id);
-              const idx = hoverId ? visibleOrder.indexOf(hoverId) : -1;
-              let nextIdx = idx;
-              if (e.key === "ArrowDown" || e.key === "ArrowRight") nextIdx = Math.min(visibleOrder.length - 1, idx + 1);
-              if (e.key === "ArrowUp" || e.key === "ArrowLeft") nextIdx = Math.max(0, idx - 1);
-              if (nextIdx !== idx && nextIdx >= 0) {
-                e.preventDefault();
-                const nid = visibleOrder[nextIdx];
+              e.preventDefault();
+              const dir = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : -1;
+              const nid = stepFocus(navNodes, hoverId, dir);
+              if (nid && nid !== hoverId) {
                 setHoverId(nid);
                 locatePerson(nid);
               }
@@ -850,7 +894,53 @@ export function TreeCanvas({
               />
             );
           })}
+          {/* Keyboard-focus halo — the focused card stays findable at every
+              zoom level (WCAG focus visible, gold = AA contrast on paper). */}
+          {(() => {
+            const fn = hoverId ? nodeById.get(hoverId) : null;
+            if (!fn) return null;
+            return (
+              <rect
+                x={fn.x - dims.NODE_W / 2 - 7}
+                y={fn.y - dims.NODE_H / 2 - 7}
+                width={dims.NODE_W + 14}
+                height={dims.NODE_H + 14}
+                rx={19}
+                fill="none"
+                stroke="var(--color-gold)"
+                strokeWidth={2}
+                strokeDasharray="7 5"
+                pointerEvents="none"
+              />
+            );
+          })()}
         </svg>
+
+        {/* Zoom indicator — appears only when labels are illegible. */}
+        {showZoomHint && (
+          <div
+            role="status"
+            className="shadow-float pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-line bg-card/95 px-3.5 py-1.5 text-xs text-ink-soft"
+          >
+            Zoom in for clearer labels — currently {zoomPct}%
+          </div>
+        )}
+
+        {/* Minimap — whole tree + live viewport; click/drag/arrow-key pans. */}
+        {isDesktop && contentBounds && layout.nodes.length >= MINIMAP_MIN_NODES && (
+          <div className="absolute bottom-4 right-4 z-20">
+            <CanvasMinimap
+              bounds={contentBounds}
+              view={{ x: view.x, y: view.y, w: view.w, h: view.w * aspect }}
+              nodes={layout.nodes.map((n) => ({ id: n.id, x: n.x, y: n.y }))}
+              focusId={focusPersonId}
+              onPan={(wx, wy) => {
+                const h = view.w * aspect;
+                setView(clampView(wx - view.w / 2, wy - h / 2, view.w));
+              }}
+            />
+          </div>
+        )}
 
         {modal && (
           <QuickAddModal
@@ -874,7 +964,16 @@ function LayoutSwitcher({ kind, onKind, compact, onCompact }: { kind: LayoutKind
           <option key={k} value={k}>{LAYOUT_LABEL[k]}</option>
         ))}
       </select>
-      <button type="button" onClick={() => onCompact(!compact)} aria-pressed={compact} title={compact ? "Compact on" : "Compact off"} className={`h-8 rounded-lg border px-2 text-xs ${compact ? "border-evergreen bg-evergreen-mist text-evergreen-deep" : "border-line bg-paper text-ink-soft"}`}>Compact</button>
+      <button
+        type="button"
+        onClick={() => onCompact(!compact)}
+        aria-pressed={compact}
+        aria-label={`Density: ${compact ? "compact" : "comfortable"} cards — click to switch`}
+        title={`Density: ${compact ? "Compact (more people per screen)" : "Comfortable (larger cards)"}`}
+        className={`h-8 rounded-lg border px-2 text-xs ${compact ? "border-evergreen bg-evergreen-mist text-evergreen-deep" : "border-line bg-paper text-ink-soft"}`}
+      >
+        {compact ? "Compact" : "Comfortable"}
+      </button>
     </div>
   );
 }
