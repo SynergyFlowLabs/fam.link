@@ -2,14 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { memories, parentChild, persons, unions } from "@/db/schema";
+import { memories, parentChild, personEvents, persons, unions } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canComment, canEdit } from "@/lib/roles";
 import { displayName, lifeLine } from "@/lib/canvas-types";
 import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
 import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/labels-fields";
+import { PersonTimelineSection } from "@/components/person-events";
 import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
+import { sortEvents } from "@/lib/person-events";
 
 export default async function PersonPage({
   params,
@@ -77,6 +79,24 @@ export default async function PersonPage({
     .select()
     .from(memories)
     .where(eq(memories.personId, personId));
+
+  const eventRows = await db
+    .select()
+    .from(personEvents)
+    .where(eq(personEvents.personId, personId));
+  const sortedEvents = sortEvents(
+    eventRows.map((ev) => ({
+      id: ev.id,
+      personId: ev.personId,
+      kind: ev.kind as import("@/lib/person-events").EventKind,
+      dateText: ev.dateText,
+      placeText: ev.placeText,
+      note: ev.note,
+      source: ev.source,
+      createdAt: ev.createdAt,
+      updatedAt: ev.updatedAt,
+    })),
+  );
 
   const personLabels = await getPersonLabels(personId);
   const allLabelDefs = await listLabelDefs(treeId);
@@ -207,6 +227,16 @@ export default async function PersonPage({
               year: "numeric",
             }),
           }))}
+        />
+      </div>
+
+      <div className="mt-6">
+        <PersonTimelineSection
+          treeId={treeId}
+          personId={personId}
+          personName={name}
+          events={sortedEvents}
+          canEdit={canEdit(role)}
         />
       </div>
 

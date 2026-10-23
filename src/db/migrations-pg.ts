@@ -374,4 +374,26 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
        EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
     ],
   },
+  {
+    name: "0003_person_events",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "person_events" (
+        "id" text PRIMARY KEY NOT NULL,
+        "person_id" text NOT NULL,
+        "kind" text NOT NULL,
+        "date_text" text,
+        "place_text" text,
+        "note" text,
+        "source" text,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS "person_events_person_idx" ON "person_events" ("person_id")`,
+      `CREATE INDEX IF NOT EXISTS "person_events_person_kind_idx" ON "person_events" ("person_id","kind")`,
+      `DO $$ BEGIN
+         ALTER TABLE "person_events" ADD CONSTRAINT "person_events_person_id_persons_id_fk"
+           FOREIGN KEY ("person_id") REFERENCES "persons"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+    ],
+  },
 ];

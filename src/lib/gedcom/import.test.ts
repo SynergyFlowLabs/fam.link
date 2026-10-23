@@ -282,3 +282,65 @@ test("round-trip: writeGedcom → parseGedcom → planImport preserves the tree"
     [plan.persons.find((p) => p.firstName === "Ali")!.localId],
   );
 });
+
+test("person events round-trip via EVEN (P1.2)", () => {
+  const input: GedcomInput = {
+    treeName: "Events",
+    persons: [
+      {
+        id: "p1",
+        firstName: "Ayesha",
+        lastName: "Khan",
+        gender: "f",
+        living: false,
+        birthDateText: "1942",
+        birthPlace: "Jalandhar",
+        deathDateText: null,
+        deathPlace: null,
+        notes: null,
+        memories: [],
+        events: [
+          { kind: "birth", dateText: "c. 1942", placeText: "Jalandhar", note: "Born before Partition", source: "Family interview Oct 2026" },
+          { kind: "relocation", dateText: "1947", placeText: "Lahore", note: "Migration to Pakistan", source: null },
+          { kind: "custom", dateText: null, placeText: null, note: "Graduated", source: "Diploma" },
+        ],
+      },
+    ],
+    unions: [],
+    links: [],
+  };
+  const text = writeGedcom(input);
+  // Writer emitted EVEN blocks
+  assert.ok(text.includes("1 EVEN"));
+  assert.ok(text.includes("2 TYPE relocation"));
+  const plan = planImport(parseGedcom(text));
+  assert.equal(plan.stats.events, 3);
+  const ayesha = plan.persons[0];
+  assert.equal(ayesha.events.length, 3);
+  const relocation = ayesha.events.find((e) => e.kind === "relocation");
+  assert.ok(relocation);
+  assert.equal(relocation.dateText, "1947");
+  assert.equal(relocation.placeText, "Lahore");
+  const birth = ayesha.events.find((e) => e.kind === "birth");
+  assert.ok(birth);
+  assert.equal(birth.source, "Family interview Oct 2026");
+  const custom = ayesha.events.find((e) => e.kind === "custom");
+  assert.ok(custom);
+  assert.equal(custom.note, "Graduated");
+});
+
+test("RESI imports as relocation", () => {
+  const parsed = parseGedcom(`0 HEAD
+0 @I1@ INDI
+1 NAME M /N/
+1 RESI
+2 DATE 1965
+2 PLAC Karachi
+0 TRLR
+`);
+  const plan = planImport(parsed);
+  assert.equal(plan.persons[0].events.length, 1);
+  assert.equal(plan.persons[0].events[0].kind, "relocation");
+  assert.equal(plan.persons[0].events[0].placeText, "Karachi");
+});
+

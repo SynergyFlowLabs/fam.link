@@ -11,6 +11,14 @@
  * the human's words survive the transfer.
  */
 
+export type GedcomPersonEvent = {
+  kind: "birth" | "death" | "marriage" | "divorce" | "relocation" | "custom";
+  dateText: string | null;
+  placeText: string | null;
+  note: string | null;
+  source: string | null;
+};
+
 export interface GedcomPerson {
   id: string;
   firstName: string | null;
@@ -23,6 +31,7 @@ export interface GedcomPerson {
   deathPlace: string | null;
   notes: string | null;
   memories: { body: string; occurredText: string | null; authorName: string | null }[];
+  events?: GedcomPersonEvent[];
 }
 
 export interface GedcomUnion {
@@ -104,6 +113,19 @@ export function writeGedcom(input: GedcomInput): string {
         .filter(Boolean)
         .join(" ");
       out.push(...noteLines(`${m.body}${meta ? " " + meta : ""}`, "MEMORY: "));
+    }
+    for (const ev of p.events ?? []) {
+      const label = ev.note && ev.kind === "custom" ? ev.note.slice(0, 60) : ev.kind;
+      out.push(`1 EVEN ${escapeLine(label ?? ev.kind)}`);
+      out.push(`2 TYPE ${ev.kind}`);
+      if (ev.dateText) out.push(`2 DATE ${escapeLine(ev.dateText)}`);
+      if (ev.placeText) out.push(`2 PLAC ${escapeLine(ev.placeText)}`);
+      if (ev.note) {
+        const noteParts = ev.note.split(/\r?\n/);
+        out.push(`2 NOTE ${escapeLine(noteParts[0])}`);
+        for (const cont of noteParts.slice(1)) out.push(`3 CONT ${escapeLine(cont)}`);
+      }
+      if (ev.source) out.push(`2 SOUR ${escapeLine(ev.source)}`);
     }
   }
 

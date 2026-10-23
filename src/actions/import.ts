@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { memories, parentChild, pendingImports, persons, trees, unions } from "@/db/schema";
+import { memories, parentChild, pendingImports, personEvents, persons, trees, unions } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ownedTree } from "@/actions/trees";
 import { getTreeAccess } from "@/lib/access";
@@ -189,12 +189,27 @@ export async function confirmGedcomImportAction(
     })),
   );
 
+  const insertedEvents = plan.persons.flatMap((p) =>
+    (p.events ?? []).map((ev) => ({
+      id: randomUUID(),
+      personId: idFor.get(p.localId) as string,
+      kind: ev.kind,
+      dateText: ev.dateText,
+      placeText: ev.placeText,
+      note: ev.note,
+      source: ev.source,
+      createdAt: now,
+      updatedAt: now,
+    })),
+  );
+
   try {
     await db.transaction(async (tx) => {
       if (insertedPersons.length > 0) await tx.insert(persons).values(insertedPersons);
       if (insertedUnions.length > 0) await tx.insert(unions).values(insertedUnions);
       if (insertedLinks.length > 0) await tx.insert(parentChild).values(insertedLinks);
       if (insertedMemories.length > 0) await tx.insert(memories).values(insertedMemories);
+      if (insertedEvents.length > 0) await tx.insert(personEvents).values(insertedEvents);
       // First import into an empty tree: root the canvas on the first person.
       if (!tree.focusPersonId && insertedPersons.length > 0) {
         await tx

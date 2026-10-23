@@ -21,6 +21,7 @@ import type {
   CustomFieldDef,
   PersonCustomValue,
   MemoryCustomValue,
+  PersonEvent,
 } from "./schema.ts";
 import type {
   PgMemory,
@@ -39,6 +40,7 @@ import type {
   PgCustomFieldDef,
   PgPersonCustomValue,
   PgMemoryCustomValue,
+  PgPersonEvent,
 } from "./schema-pg.ts";
 
 /**
@@ -70,6 +72,7 @@ const SQLITE_TABLES = {
   customFieldDefs: sqlite.customFieldDefs,
   personCustomValues: sqlite.personCustomValues,
   memoryCustomValues: sqlite.memoryCustomValues,
+  personEvents: sqlite.personEvents,
 } as const;
 
 const PG_TABLES = {
@@ -92,6 +95,7 @@ const PG_TABLES = {
   customFieldDefs: pg.customFieldDefs,
   personCustomValues: pg.personCustomValues,
   memoryCustomValues: pg.memoryCustomValues,
+  personEvents: pg.personEvents,
 } as const;
 
 describe("schema parity (sqlite ↔ postgres)", () => {
@@ -157,4 +161,6 @@ export type SchemaParityCheck = [
   PersonCustomValue extends PgPersonCustomValue ? true : never,
   PgMemoryCustomValue extends MemoryCustomValue ? true : never,
   MemoryCustomValue extends PgMemoryCustomValue ? true : never,
+  PgPersonEvent extends PersonEvent ? true : never,
+  PersonEvent extends PgPersonEvent ? true : never,
 ];
