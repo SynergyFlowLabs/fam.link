@@ -241,6 +241,7 @@ export default async function TreeCanvasPage({
       activityHref={`/app/trees/${treeId}/activity`}
       galleryHref={`/app/trees/${treeId}/gallery`}
       walkthroughHref={`/app/trees/${treeId}/walkthrough`}
+      bookHref={`/app/trees/${treeId}/book`}
       labelDefs={labelDefs.map((l) => ({ id: l.id, name: l.name, color: l.color }))}
       fieldDefs={fieldDefs.map((f) => ({ id: f.id, name: f.name, kind: f.kind as never, optionsJson: f.optionsJson }))}
     />
