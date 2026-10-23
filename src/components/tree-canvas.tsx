@@ -20,6 +20,8 @@ import {
 } from "@/lib/canvas-types";
 import { labelColorFor } from "@/lib/labels";
 import { breadcrumbNames, describeRelationship, findRelationshipPath, searchPersons, type SearchHit } from "@/lib/search";
+import { relationLabel, relationStrokeProps } from "@/lib/layout/edges";
+import type { RelationKind } from "@/lib/canvas-types";
 import { setFocusPersonAction } from "@/actions/persons";
 import { QuickAddModal, type Relation } from "./quick-add-modal";
 
@@ -343,6 +345,14 @@ export function TreeCanvas({
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const [fieldFilter, setFieldFilter] = useState<string | null>(null);
   const [fieldQuery, setFieldQuery] = useState<string>("");
+  const [hiddenRelations, setHiddenRelations] = useState<Set<RelationKind>>(new Set());
+  const toggleRelation = (k: RelationKind) => {
+    setHiddenRelations((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
 
   // URL query persistence for faceted filters (shareable): ?label=&field=&q=
   useEffect(() => {
@@ -463,6 +473,7 @@ export function TreeCanvas({
               totalCount={persons.length}
             />
           )}
+          <RelationLegend hidden={hiddenRelations} onToggle={toggleRelation} />
           {exportsOn && (
           <details className="relative">
             <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">
@@ -580,6 +591,7 @@ export function TreeCanvas({
             links={links}
             nodeById={nodeById}
             unionById={unionById}
+            hiddenRelations={hiddenRelations}
           />
           {layout.nodes.map((n) => {
             const p = personById.get(n.id);
@@ -645,23 +657,54 @@ export function TreeCanvas({
   );
 }
 
+function RelationLegend({ hidden, onToggle }: { hidden: Set<RelationKind>; onToggle: (k: RelationKind) => void }) {
+  const items: { kind: RelationKind; label: string; dash: string }[] = [
+    { kind: "biological", label: "Biological", dash: "solid" },
+    { kind: "adoptive", label: "Adopted", dash: "8 5" },
+    { kind: "step", label: "Step", dash: "4 6" },
+    { kind: "foster", label: "Foster", dash: "2 5" },
+  ];
+  return (
+    <details className="relative">
+      <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">Legend</summary>
+      <div className="shadow-float absolute left-1/2 top-9 z-40 w-56 -translate-x-1/2 rounded-xl border border-line bg-card p-3">
+        <p className="text-xs font-medium text-ink">Relationship lines</p>
+        <ul className="mt-2 space-y-1.5">
+          {items.map((it) => {
+            const isHidden = hidden.has(it.kind);
+            return (
+              <li key={it.kind} className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-xs text-ink-soft">
+                  <svg width={24} height={10} className="shrink-0"><line x1={0} y1={5} x2={24} y2={5} stroke="var(--color-ink-soft)" strokeWidth={1.5} strokeDasharray={it.dash === "solid" ? undefined : it.dash} /></svg>
+                  {it.label}
+                </span>
+                <button type="button" onClick={() => onToggle(it.kind)} className={`rounded-full border px-2 py-0.5 text-[11px] ${isHidden ? "border-line bg-paper text-ink-soft" : "border-evergreen bg-evergreen-mist text-evergreen-deep"}`}>{isHidden ? "Hidden" : "Shown"}</button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-2 text-[11px] leading-snug text-ink-soft">Dashed/dotted edges distinguish adoptive, step & foster ties. Toggle to dim them without moving the tree.</p>
+      </div>
+    </details>
+  );
+}
+
 function Edges({
   unions,
   links,
   nodeById,
   unionById,
+  hiddenRelations,
 }: {
   unions: CanvasUnion[];
   links: CanvasLink[];
   nodeById: Map<string, { x: number; y: number }>;
   unionById: Map<string, CanvasUnion>;
+  hiddenRelations?: Set<RelationKind>;
 }) {
   return (
     <g
-      stroke="var(--color-ink-soft)"
-      strokeWidth={1.5}
       fill="none"
-      opacity={0.55}
       strokeLinecap="round"
       strokeLinejoin="round"
     >
@@ -669,19 +712,22 @@ function Edges({
         const a = nodeById.get(u.partnerAId);
         const b = u.partnerBId ? nodeById.get(u.partnerBId) : null;
         if (!a || !b) return null;
-        return <path key={`c-${u.id}`} d={coupleEdgeD(a, b, NODE_W)} />;
+        // Dim multi-spouse couples slightly? Already same style — keep solid for now.
+        return <path key={`c-${u.id}`} d={coupleEdgeD(a, b, NODE_W)} stroke="var(--color-ink-soft)" strokeWidth={1.5} opacity={0.55} />;
       })}
       {links.map((l) => {
         const u = unionById.get(l.unionId);
         const child = nodeById.get(l.childId);
         if (!u || !child) return null;
+        const rel = (l as unknown as { relation?: RelationKind }).relation ?? "biological";
+        const isHidden = hiddenRelations?.has(rel);
+        const { strokeDasharray } = relationStrokeProps(rel);
         const a = nodeById.get(u.partnerAId);
         const b = u.partnerBId ? nodeById.get(u.partnerBId) : null;
         let sx: number;
         let sy: number;
         if (a && b) {
           sx = (a.x + b.x) / 2;
-          // drop straight off the marriage line — a clean T-junction
           sy = a.y + 1;
         } else if (a || b) {
           const single = (a ?? b) as { x: number; y: number };
@@ -691,11 +737,12 @@ function Edges({
           return null;
         }
         const ty = child.y - NODE_H / 2 - 1;
+        const d = parentChildEdgeD(sx, sy, child.x, ty);
+        const label = relationLabel(rel);
         return (
-          <path
-            key={`p-${l.unionId}-${l.childId}`}
-            d={parentChildEdgeD(sx, sy, child.x, ty)}
-          />
+          <g key={`p-${l.unionId}-${l.childId}`} opacity={isHidden ? 0.15 : 0.62}>
+            <path d={d} stroke="var(--color-ink-soft)" strokeWidth={1.5} strokeDasharray={strokeDasharray} aria-label={`${label} child link`} />
+          </g>
         );
       })}
     </g>

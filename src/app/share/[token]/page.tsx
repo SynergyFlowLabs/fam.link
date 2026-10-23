@@ -61,7 +61,7 @@ export default async function SharedTreePage({
     .from(unions)
     .where(eq(unions.treeId, link.treeId));
   const linkRows = await db
-    .select({ unionId: parentChild.unionId, childId: parentChild.childId })
+    .select({ unionId: parentChild.unionId, childId: parentChild.childId, relation: parentChild.relation })
     .from(parentChild)
     .innerJoin(unions, eq(parentChild.unionId, unions.id))
     .where(eq(unions.treeId, link.treeId));

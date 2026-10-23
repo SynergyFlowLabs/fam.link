@@ -204,7 +204,7 @@ export async function GET(
         dateText: u.dateText,
         placeText: u.placeText,
       })),
-      links: linkRows.map((l) => ({ unionId: l.unionId, childId: l.childId })),
+      links: linkRows.map((l) => ({ unionId: l.unionId, childId: l.childId, relation: ((l as unknown as { relation?: string }).relation as "biological" | "adoptive" | "step" | "foster" | undefined) ?? "biological" })),
     });
     return new Response(text, {
       headers: {

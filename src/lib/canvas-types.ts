@@ -42,9 +42,12 @@ export interface CanvasUnion {
   status: "married" | "partners" | "divorced" | "separated" | "widowed" | null;
 }
 
+export type RelationKind = "biological" | "adoptive" | "step" | "foster";
+
 export interface CanvasLink {
   unionId: string;
   childId: string;
+  relation?: RelationKind;
 }
 
 export function displayName(p: {

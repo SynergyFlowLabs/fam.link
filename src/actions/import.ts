@@ -174,6 +174,7 @@ export async function confirmGedcomImportAction(
     id: randomUUID(),
     unionId: unionIdFor.get(l.unionLocalId) as string,
     childId: idFor.get(l.childLocalId) as string,
+    relation: (l.relation ?? "biological") as "biological" | "adoptive" | "step" | "foster",
   }));
 
   const insertedMemories = plan.persons.flatMap((p) =>

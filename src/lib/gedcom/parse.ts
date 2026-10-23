@@ -34,6 +34,8 @@ export interface ParsedFamily {
   husbandXref: string | null;
   wifeXref: string | null;
   childXrefs: string[];
+  /** Per-child PEDI/ADOP/ FREL etc — defaults to biological */
+  childRelations: Map<string, "biological" | "adoptive" | "step" | "foster">;
   marriageDateText: string | null;
   marriagePlaceText: string | null;
   divorced: boolean;
@@ -242,23 +244,47 @@ export function parseGedcom(text: string): ParsedGedcom {
         husbandXref: null,
         wifeXref: null,
         childXrefs: [],
+        childRelations: new Map(),
         marriageDateText: null,
         marriagePlaceText: null,
         divorced: false,
       };
       let inMarr = false;
+      let lastChildXref: string | null = null;
+      const normalizeChildRel = (tag: string, value: string): "biological" | "adoptive" | "step" | "foster" | null => {
+        const t = tag.toUpperCase();
+        const v = value.toLowerCase();
+        if (t === "ADOP" || (t === "PEDI" && v.includes("adopt"))) return "adoptive";
+        if (t === "PEDI" && v.includes("step")) return "step";
+        if (t === "PEDI" && v.includes("foster")) return "foster";
+        if (t === "FREL" && v.includes("adopt")) return "adoptive";
+        if (t === "FREL" && v.includes("step")) return "step";
+        if (t === "FREL" && v.includes("foster")) return "foster";
+        if (t === "MREL" && v.includes("adopt")) return "adoptive";
+        if (t === "MREL" && v.includes("step")) return "step";
+        if (t === "MREL" && v.includes("foster")) return "foster";
+        if (t === "ADOP") return "adoptive";
+        return null;
+      };
       for (let j = i + 1; j < lines.length && lines[j].level > 0; j++) {
         const l = lines[j];
         if (l.level === 1) {
           inMarr = false;
+          lastChildXref = null;
           if (l.tag === "HUSB" && l.value) fam.husbandXref = l.value;
           else if (l.tag === "WIFE" && l.value) fam.wifeXref = l.value;
-          else if (l.tag === "CHIL" && l.value) fam.childXrefs.push(l.value);
+          else if (l.tag === "CHIL" && l.value) { fam.childXrefs.push(l.value); lastChildXref = l.value; }
           else if (l.tag === "MARR") inMarr = true;
           else if (l.tag === "DIV") fam.divorced = true;
-        } else if (l.level === 2 && inMarr) {
-          if (l.tag === "DATE" && l.value) fam.marriageDateText = l.value;
-          else if (l.tag === "PLAC" && l.value) fam.marriagePlaceText = l.value;
+        } else if (l.level === 2) {
+          if (inMarr) {
+            if (l.tag === "DATE" && l.value) fam.marriageDateText = l.value;
+            else if (l.tag === "PLAC" && l.value) fam.marriagePlaceText = l.value;
+          }
+          if (lastChildXref && ["ADOP","PEDI","FREL","MREL"].includes(l.tag)) {
+            const kind = normalizeChildRel(l.tag, l.value || "");
+            if (kind) fam.childRelations.set(lastChildXref, kind);
+          }
         }
       }
       families.push(fam);

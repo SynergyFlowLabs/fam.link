@@ -51,6 +51,7 @@ export interface PlanUnion {
 export interface PlanLink {
   unionLocalId: string;
   childLocalId: string;
+  relation: "biological" | "adoptive" | "step" | "foster";
 }
 
 export interface ImportStats {
@@ -187,7 +188,8 @@ export function planImport(parsed: ParsedGedcom): ImportPlan {
     if (!union) continue;
     for (const childXref of fam.childXrefs) {
       if (!personByLocalId.has(childXref)) continue; // parser warned already
-      links.push({ unionLocalId: fam.xref, childLocalId: childXref });
+      const rel = (fam.childRelations?.get(childXref) as PlanLink["relation"]) ?? "biological";
+      links.push({ unionLocalId: fam.xref, childLocalId: childXref, relation: rel });
     }
   }
   // A malformed file can declare someone their own ancestor. fam.link's graph

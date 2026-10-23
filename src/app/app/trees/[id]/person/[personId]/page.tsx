@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canComment, canEdit } from "@/lib/roles";
 import { displayName, lifeLine } from "@/lib/canvas-types";
+import { relationLabel } from "@/lib/layout/edges";
 import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
 import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/labels-fields";
 import { PersonTimelineSection } from "@/components/person-events";
@@ -54,7 +55,8 @@ export default async function PersonPage({
     if (!u) continue;
     for (const pid of [u.partnerAId, u.partnerBId]) {
       if (pid && pid !== personId && personMap.has(pid)) {
-        parents.push({ id: pid, label: l.relation ?? "parent" });
+        const rel = (l as unknown as { relation?: string | null }).relation;
+        parents.push({ id: pid, label: rel && rel !== "biological" ? relationLabel(rel) : "parent" });
       }
     }
     for (const other of linkRows.filter(
@@ -65,13 +67,17 @@ export default async function PersonPage({
   }
 
   const spouses: { id: string; status: string | null }[] = [];
-  const children = new Set<string>();
+  const children: { id: string; relation: string | null }[] = [];
+  const childSeen = new Set<string>();
   for (const u of unionRows) {
     if (u.partnerAId !== personId && u.partnerBId !== personId) continue;
     const other = u.partnerAId === personId ? u.partnerBId : u.partnerAId;
     if (other && personMap.has(other)) spouses.push({ id: other, status: u.status });
     for (const l of linkRows.filter((l) => l.unionId === u.id)) {
-      if (personMap.has(l.childId)) children.add(l.childId);
+      if (personMap.has(l.childId) && !childSeen.has(l.childId)) {
+        childSeen.add(l.childId);
+        children.push({ id: l.childId, relation: (l as unknown as { relation?: string }).relation ?? null });
+      }
     }
   }
 
@@ -182,13 +188,14 @@ export default async function PersonPage({
           <h3 className="mt-7 mb-3 border-t border-line pt-4 text-sm font-semibold text-ink">
             Relationships
           </h3>
-          <RelList title="Parents" items={parents.map((p) => p.id)} personMap={personMap} treeId={treeId} />
+          <RelList title="Parents" items={parents.map((p) => p.id)} personMap={personMap} treeId={treeId} badges={Object.fromEntries(parents.map((p) => [p.id, p.label !== "parent" ? p.label : null]))} />
           <RelList title="Spouses" items={spouses.map((s) => s.id)} personMap={personMap} treeId={treeId} />
           <RelList
             title="Children"
-            items={[...children]}
+            items={children.map((c) => c.id)}
             personMap={personMap}
             treeId={treeId}
+            badges={Object.fromEntries(children.map((c) => [c.id, c.relation && c.relation !== "biological" ? c.relation : null]))}
           />
           <RelList
             title="Siblings"
@@ -290,12 +297,14 @@ function RelList({
   personMap,
   treeId,
   last = false,
+  badges,
 }: {
   title: string;
   items: string[];
   personMap: Map<string, typeof persons.$inferSelect>;
   treeId: string;
   last?: boolean;
+  badges?: Record<string, string | null>;
 }) {
   return (
     <div className={last ? "" : "mb-2.5"}>
@@ -312,14 +321,16 @@ function RelList({
           {items.map((id) => {
             const p = personMap.get(id);
             if (!p) return null;
+            const badge = badges?.[id];
             return (
-              <li key={id}>
+              <li key={id} className="inline-flex items-center gap-1">
                 <Link
                   href={`/app/trees/${treeId}/person/${id}`}
                   className="text-evergreen underline-offset-2 hover:underline"
                 >
                   {displayName(p)}
                 </Link>
+                {badge && <span className="rounded-full bg-evergreen-mist px-1.5 py-0.5 text-[10px] font-medium text-evergreen-deep">{badge}</span>}
               </li>
             );
           })}

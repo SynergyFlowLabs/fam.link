@@ -46,6 +46,7 @@ export interface GedcomUnion {
 export interface GedcomLink {
   unionId: string;
   childId: string;
+  relation?: "biological" | "adoptive" | "step" | "foster";
 }
 
 export interface GedcomInput {
@@ -135,7 +136,10 @@ export function writeGedcom(input: GedcomInput): string {
     if (u.partnerBId) out.push(`1 WIFE ${indiXref.get(u.partnerBId) ?? ""}`.trimEnd());
     for (const l of input.links.filter((l) => l.unionId === u.id)) {
       const xref = indiXref.get(l.childId);
-      if (xref) out.push(`1 CHIL ${xref}`);
+      if (xref) {
+        out.push(`1 CHIL ${xref}`);
+        if (l.relation && l.relation !== "biological") out.push(`2 PEDI ${l.relation}`);
+      }
     }
     if (u.status === "married" || u.status === "divorced" || u.status === "widowed") {
       out.push(`1 ${u.status === "married" ? "MARR" : u.status === "divorced" ? "DIV" : "ANUL"}`);

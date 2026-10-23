@@ -344,3 +344,58 @@ test("RESI imports as relocation", () => {
   assert.equal(plan.persons[0].events[0].placeText, "Karachi");
 });
 
+test("GEDCOM PEDI adoptive maps to parent_child relation", () => {
+  const parsed = parseGedcom(`0 HEAD
+0 @I1@ INDI
+1 NAME A /B/
+0 @I2@ INDI
+1 NAME C /D/
+0 @F1@ FAM
+1 HUSB @I1@
+1 CHIL @I2@
+2 PEDI adopted
+0 TRLR
+`);
+  const plan = planImport(parsed);
+  assert.equal(plan.links.length, 1);
+  assert.equal(plan.links[0].relation, "adoptive");
+});
+
+test("GEDCOM FREL step/foster maps correctly", () => {
+  const parsed = parseGedcom(`0 HEAD
+0 @I1@ INDI
+1 NAME A /B/
+0 @I2@ INDI
+1 NAME C /D/
+0 @I3@ INDI
+1 NAME E /F/
+0 @F1@ FAM
+1 HUSB @I1@
+1 CHIL @I2@
+2 FREL step
+1 CHIL @I3@
+2 PEDI foster
+0 TRLR
+`);
+  const plan = planImport(parsed);
+  const rels = new Map(plan.links.map((l) => [l.childLocalId, l.relation]));
+  assert.equal(rels.get("@I2@"), "step");
+  assert.equal(rels.get("@I3@"), "foster");
+});
+
+test("writer round-trips adoptive relation via PEDI", () => {
+  const ged = writeGedcom({
+    treeName: "t",
+    persons: [
+      { id: "p1", firstName: "A", lastName: "B", gender: null, living: true, birthDateText: null, birthPlace: null, deathDateText: null, deathPlace: null, notes: null, memories: [] },
+      { id: "p2", firstName: "C", lastName: "D", gender: null, living: true, birthDateText: null, birthPlace: null, deathDateText: null, deathPlace: null, notes: null, memories: [] },
+    ],
+    unions: [{ id: "u1", partnerAId: "p1", partnerBId: null, status: null, dateText: null, placeText: null }],
+    links: [{ unionId: "u1", childId: "p2", relation: "adoptive" }],
+  });
+  assert.ok(ged.includes("1 CHIL"), "CHIL present");
+  assert.ok(ged.includes("2 PEDI adoptive"), "PEDI adoptive present");
+  const plan = planImport(parseGedcom(ged));
+  assert.equal(plan.links[0].relation, "adoptive");
+});
+
