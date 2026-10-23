@@ -278,3 +278,57 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---- Print & the family book (issue #39) ---- */
+.book-page {
+  /* The keepsake's aged-paper stock, matching the PDF theme. */
+  background: #faf6ec;
+}
+.book-person {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.book-page-break {
+  break-before: page;
+  page-break-before: always;
+}
+.book-photo {
+  break-inside: avoid;
+}
+
+@media print {
+  /* Strip app chrome: nav, toasts, toolbars, headers/footers, buttons. */
+  .book-no-print,
+  header app-chrome,
+  nav,
+  .toast-container,
+  button {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .book-view {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .book-page {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  /* Person pages & timeline paginate cleanly when printed directly. */
+  .card,
+  section {
+    break-inside: avoid;
+  }
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+  a[href]::after {
+    content: "";
+  }
+}
