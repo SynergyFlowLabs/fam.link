@@ -63,6 +63,12 @@ interface Props {
   headerExtra?: React.ReactNode;
   /** Editor-and-up: link to the GEDCOM import review screen. */
   importHref?: string | null;
+  /**
+   * Base path for person-card links. Defaults to /app/trees/{treeId};
+   * public explore views pass /explore/{treeId}. Redacted (living) cards
+   * never link — their person pages are private.
+   */
+  personHrefBase?: string | null;
 }
 
 const MIN_W = 360;
@@ -81,6 +87,7 @@ export function TreeCanvas({
   memberNote = null,
   headerExtra = null,
   importHref = null,
+  personHrefBase = null,
 }: Props) {
   const editable = canEdit ?? !readOnly;
   const exportsOn = showExport ?? !readOnly;
@@ -98,6 +105,7 @@ export function TreeCanvas({
     () => new Map(persons.map((p) => [p.id, p])),
     [persons],
   );
+  const personBase = personHrefBase ?? `/app/trees/${treeId}`;
   const nodeById = useMemo(
     () => new Map(layout.nodes.map((n) => [n.id, n])),
     [layout],
@@ -401,7 +409,8 @@ export function TreeCanvas({
                 isFocus={n.id === focusPersonId}
                 hovered={hoverId === n.id}
                 flash={highlightId === n.id}
-                linked={!readOnly}
+                linked={!readOnly && p.redacted !== true}
+                personHref={`${personBase}/person/${p.id}`}
                 canEdit={editable}
                 onHover={setHoverId}
                 onQuickAdd={(relation) => setModal({ anchorId: n.id, relation })}
@@ -568,6 +577,7 @@ function PersonNode({
   hovered,
   flash = false,
   linked = true,
+  personHref = null,
   canEdit = true,
   onHover,
   onQuickAdd,
@@ -582,6 +592,8 @@ function PersonNode({
   flash?: boolean;
   /** Card is a link to the person page (share views: false). */
   linked?: boolean;
+  /** Where the card links (set when linked). */
+  personHref?: string | null;
   /** Quick-add pills + re-root button (owner/editor only). */
   canEdit?: boolean;
   onHover: (id: string | null) => void;
@@ -670,8 +682,8 @@ function PersonNode({
           fill="transparent"
         />
       )}
-      {linked ? (
-        <a href={`/app/trees/${treeId}/person/${person.id}`}>{card}</a>
+      {linked && personHref ? (
+        <a href={personHref}>{card}</a>
       ) : (
         <g>{card}</g>
       )}

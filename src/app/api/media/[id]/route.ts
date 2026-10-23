@@ -7,10 +7,13 @@ import { getCurrentUser } from "@/lib/auth";
 import { getShareLinkByToken } from "@/lib/share";
 
 /**
- * Serves uploaded media. Three ways to see a file:
+ * Serves uploaded media. Four ways to see a file:
  *  1. Signed-in owner or invited member of the tree the media belongs to.
  *  2. A valid share token (?t=…) for that tree — used by the public
  *     read-only share view.
+ *  3. The media belongs to a published tree — anyone exploring /explore
+ *     can see it (living relatives' media is filtered out of public
+ *     pages/exports, so only deceased-story media reaches this path).
  * Everyone else gets a 404 (not 403 — existence stays private).
  */
 export async function GET(
@@ -20,7 +23,11 @@ export async function GET(
   const { id } = await params;
 
   const rows = await db
-    .select({ media, ownerId: trees.ownerId })
+    .select({
+      media,
+      ownerId: trees.ownerId,
+      visibility: trees.visibility,
+    })
     .from(media)
     .innerJoin(trees, eq(media.treeId, trees.id))
     .where(eq(media.id, id))
@@ -51,6 +58,7 @@ export async function GET(
       if (link && link.treeId === row.media.treeId) allowed = true;
     }
   }
+  if (!allowed && row.visibility === "public") allowed = true;
   if (!allowed) return new Response("Not found", { status: 404 });
 
   try {

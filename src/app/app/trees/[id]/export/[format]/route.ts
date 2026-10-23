@@ -10,21 +10,26 @@ import {
   media,
 } from "@/db/schema";
 import { writeGedcom } from "@/lib/gedcom/writer";
+import { getPublicTree } from "@/lib/public-trees";
+import { REDACTED_NAME } from "@/lib/canvas-types";
+import type { Person } from "@/db/schema";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; format: string }> },
 ): Promise<Response> {
   const { id: treeId, format } = await params;
-  const user = await getCurrentUser();
-  if (!user) return new Response("Not found", { status: 404 });
   // Exports are part of the no-lock-in promise: every member of a tree
   // (owner, editor, commenter, viewer) can take their data out.
-  const access = await getTreeAccess(treeId, user.id);
-  if (!access) return new Response("Not found", { status: 404 });
-  const tree = access.tree;
+  const user = await getCurrentUser();
+  const access = user ? await getTreeAccess(treeId, user.id) : null;
+  // Public trees export anonymously too — the no-lock-in idea cuts both
+  // ways — but living relatives are redacted exactly like the public views.
+  const publicExport = !access && (await getPublicTree(treeId)) !== null;
+  const tree = access?.tree ?? (publicExport ? await getPublicTree(treeId) : null);
+  if (!tree) return new Response("Not found", { status: 404 });
 
-  const personRows = await db
+  let personRows = await db
     .select()
     .from(persons)
     .where(eq(persons.treeId, treeId));
@@ -44,7 +49,7 @@ export async function GET(
             ),
           )
       : [];
-  const memoryRows = await db
+  let memoryRows = await db
     .select()
     .from(memories)
     .innerJoin(persons, eq(memories.personId, persons.id))
@@ -53,6 +58,33 @@ export async function GET(
     .select()
     .from(media)
     .where(eq(media.treeId, treeId));
+
+  const redact = (p: Person): Person =>
+    p.living
+      ? {
+          ...p,
+          firstName: REDACTED_NAME,
+          lastName: null,
+          alsoKnownAs: null,
+          gender: null,
+          birthDateText: null,
+          birthPlace: null,
+          deathDateText: null,
+          deathPlace: null,
+          notes: null,
+        }
+      : p;
+  if (publicExport) {
+    personRows = personRows.map(redact);
+    // Memories of living relatives (and their media) leave with the person.
+    const livingIds = new Set(
+      personRows.filter((p) => p.living).map((p) => p.id),
+    );
+    memoryRows = memoryRows.filter((m) => !livingIds.has(m.persons.id));
+    // Media hangs off memories, so the memory filter above already pulled
+    // the living's photos/voice notes out of the story.
+
+  }
 
   const safeName =
     tree.name.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") ||
