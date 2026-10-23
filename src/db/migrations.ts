@@ -117,6 +117,15 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
     ],
   },
   {
+    // Activity feed with undo (issue #31, P3.1)
+    name: "0009_activity_feed",
+    statements: [
+      "CREATE TABLE IF NOT EXISTS `activity_feed` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`actor_user_id` text,\n\t`actor_name` text NOT NULL,\n\t`action` text NOT NULL,\n\t`target_type` text NOT NULL,\n\t`target_id` text,\n\t`target_label` text,\n\t`detail_json` text DEFAULT '{}' NOT NULL,\n\t`undoable` integer DEFAULT false NOT NULL,\n\t`undone_at` integer,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`actor_user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+      "CREATE INDEX IF NOT EXISTS `activity_feed_tree_idx` ON `activity_feed` (`tree_id`);",
+      "CREATE INDEX IF NOT EXISTS `activity_feed_tree_created_idx` ON `activity_feed` (`tree_id`,`created_at`);",
+    ],
+  },
+  {
     // Branch-scoped sharing (issue #25, P1.5)
     name: "0007_branch_scope",
     statements: [

@@ -1,10 +1,10 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { personEvents, persons } from "@/db/schema";
+import { personEvents, persons, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { ActionResult } from "@/lib/action-result";
@@ -16,6 +16,12 @@ import {
   validatePlaceText,
   validateSource,
 } from "@/lib/person-events";
+import { logActivity } from "@/lib/activity-log";
+
+async function actorNameOf(userId: string): Promise<string> {
+  const rows = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+  return rows[0]?.name ?? "Someone";
+}
 
 function err(msg: string): ActionResult {
   return { ok: false, message: msg } as unknown as ActionResult;
@@ -68,7 +74,7 @@ export async function createPersonEventAction(
   if (!person || person.treeId !== treeId) return err("Person not found in this tree.");
 
   const id = randomUUID();
-  await db.insert(personEvents).values({
+  const evSnap = {
     id,
     personId,
     kind,
@@ -76,6 +82,19 @@ export async function createPersonEventAction(
     placeText: placeText || null,
     note: note || null,
     source: source || null,
+  };
+  await db.insert(personEvents).values(evSnap);
+
+  await logActivity({
+    treeId,
+    actorUserId: user.id,
+    actorName: await actorNameOf(user.id),
+    action: "add_event",
+    targetType: "event",
+    targetId: id,
+    targetLabel: null,
+    detail: { personIds: [personId], kind, event: evSnap },
+    undoable: true,
   });
 
   revalidatePath(`/app/trees/${treeId}/person/${personId}`);
@@ -120,12 +139,13 @@ export async function updatePersonEventAction(
     return err("Only editors and owners can update events.");
 
   const evRows = await db
-    .select({ id: personEvents.id, personId: personEvents.personId })
+    .select()
     .from(personEvents)
     .where(eq(personEvents.id, eventId))
     .limit(1);
-  if (!evRows[0]) return err("Event not found.");
-  if (evRows[0].personId !== personId) return err("Event does not belong to this person.");
+  const prevEvent = evRows[0];
+  if (!prevEvent) return err("Event not found.");
+  if (prevEvent.personId !== personId) return err("Event does not belong to this person.");
 
   await db
     .update(personEvents)
@@ -138,6 +158,18 @@ export async function updatePersonEventAction(
       updatedAt: new Date(),
     })
     .where(eq(personEvents.id, eventId));
+
+  await logActivity({
+    treeId,
+    actorUserId: user.id,
+    actorName: await actorNameOf(user.id),
+    action: "update_event",
+    targetType: "event",
+    targetId: eventId,
+    targetLabel: null,
+    detail: { personIds: [personId], kind, prev: prevEvent },
+    undoable: true,
+  });
 
   revalidatePath(`/app/trees/${treeId}/person/${personId}`);
   return { ok: true, message: "Event updated." } as unknown as ActionResult;
@@ -158,7 +190,7 @@ export async function deletePersonEventAction(
     return err("Only editors and owners can delete events.");
 
   const evRows = await db
-    .select({ id: personEvents.id, personId: personEvents.personId })
+    .select()
     .from(personEvents)
     .where(eq(personEvents.id, eventId))
     .limit(1);
@@ -167,6 +199,17 @@ export async function deletePersonEventAction(
   if (ev.personId !== personId) return err("Event does not belong to this person.");
 
   await db.delete(personEvents).where(eq(personEvents.id, eventId));
+  await logActivity({
+    treeId,
+    actorUserId: user.id,
+    actorName: await actorNameOf(user.id),
+    action: "delete_event",
+    targetType: "event",
+    targetId: eventId,
+    targetLabel: null,
+    detail: { personIds: [personId], kind: ev.kind, event: ev },
+    undoable: true,
+  });
   revalidatePath(`/app/trees/${treeId}/person/${personId}`);
   return { ok: true, message: "Event removed." } as unknown as ActionResult;
 }

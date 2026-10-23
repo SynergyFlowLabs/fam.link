@@ -416,6 +416,36 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
     ],
   },
   {
+    // Activity feed with undo (issue #31, P3.1)
+    name: "0006_activity_feed",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "activity_feed" (
+         "id" text PRIMARY KEY NOT NULL,
+         "tree_id" text NOT NULL,
+         "actor_user_id" text,
+         "actor_name" text NOT NULL,
+         "action" text NOT NULL,
+         "target_type" text NOT NULL,
+         "target_id" text,
+         "target_label" text,
+         "detail_json" text DEFAULT '{}' NOT NULL,
+         "undoable" boolean DEFAULT false NOT NULL,
+         "undone_at" timestamp,
+         "created_at" timestamp DEFAULT now() NOT NULL
+       )`,
+      `DO $$ BEGIN
+         ALTER TABLE "activity_feed" ADD CONSTRAINT "activity_feed_tree_id_trees_id_fk"
+           FOREIGN KEY ("tree_id") REFERENCES "trees"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "activity_feed" ADD CONSTRAINT "activity_feed_actor_user_id_users_id_fk"
+           FOREIGN KEY ("actor_user_id") REFERENCES "users"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `CREATE INDEX IF NOT EXISTS "activity_feed_tree_idx" ON "activity_feed" ("tree_id")`,
+      `CREATE INDEX IF NOT EXISTS "activity_feed_tree_created_idx" ON "activity_feed" ("tree_id","created_at")`,
+    ],
+  },
+  {
     name: "0004_branch_scope",
     statements: [
       `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "scope_person_id" text REFERENCES "persons"("id") ON DELETE set null`,
