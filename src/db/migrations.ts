@@ -155,5 +155,11 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
       "CREATE UNIQUE INDEX IF NOT EXISTS `ask_links_token_unique` ON `ask_links` (`token`);",
       "CREATE INDEX IF NOT EXISTS `ask_links_tree_idx` ON `ask_links` (`tree_id`);",
     ],
+  },  {
+    // Voice memories — audio duration on media rows (issue #36, P4.1)
+    name: "0013_media_duration",
+    statements: [
+      "ALTER TABLE `media` ADD COLUMN `duration_seconds` integer;",
+    ],
   },
 ];

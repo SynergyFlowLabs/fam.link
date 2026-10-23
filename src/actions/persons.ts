@@ -34,6 +34,13 @@ import {
 import { displayNameOf, parsePersonFields } from "@/lib/person-fields";
 import { OK, fail, type ActionResult } from "@/lib/action-result";
 import { logActivity } from "@/lib/activity-log";
+import {
+  audioExtForMime,
+  isAllowedAudioMime,
+  isValidVoiceClip,
+  parseDurationSeconds,
+  VOICE_MAX_BYTES,
+} from "@/lib/voice-media";
 import { actorNameOf } from "@/lib/actors";
 import type { PersonFields } from "@/lib/person-fields";
 
@@ -445,6 +452,95 @@ export async function addMemoryAction(
   });
   revalidateTree(treeId, personId);
   return OK;
+}
+
+/**
+ * Voice memory (issue #36): an in-browser recording (MediaRecorder webm/
+ * opus) uploaded as a file — same media pipeline as photos, plus duration
+ * metadata. The optional typed transcript rides in `body`.
+ */
+export async function addVoiceMemoryAction(
+  formData: FormData,
+): Promise<ActionResult> {
+  const treeId = String(formData.get("treeId") ?? "");
+  const access = await accessFor(treeId);
+  if (!access) return fail("You don't have access to that tree.");
+  {
+    const targetId = String(formData.get("personId") ?? "");
+    const scopeFail = await scopeGuard(access, treeId, targetId);
+    if (scopeFail) return scopeFail;
+  }
+  if (!canComment(access.role)) {
+    return fail(
+      "Sharing memories here needs the Commenter role — ask its owner for access.",
+    );
+  }
+  const personId = String(formData.get("personId") ?? "");
+  const audio = formData.get("audio");
+
+  if (!(audio instanceof File) || audio.size === 0)
+    return fail("The recording didn't make it — please record it again.");
+  if (!isAllowedAudioMime(audio.type))
+    return fail("That audio format isn't supported — try recording again in the app.");
+  if (audio.size > VOICE_MAX_BYTES)
+    return fail("Voice recordings need to be under 10 MB — try a shorter story.");
+  const durationSeconds = parseDurationSeconds(String(formData.get("duration") ?? ""));
+  if (!isValidVoiceClip(audio.size, durationSeconds))
+    return fail("Voice recordings are capped at 5 minutes — try a shorter story.");
+
+  const ext = audioExtForMime(audio.type);
+  const mediaId = randomUUID();
+  const dir = path.join(DATA_DIR, "uploads");
+  mkdirSync(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, `${mediaId}.${ext}`),
+    Buffer.from(await audio.arrayBuffer()),
+  );
+  await db.insert(media).values({
+    id: mediaId,
+    treeId,
+    path: `uploads/${mediaId}.${ext}`,
+    mimeType: audio.type,
+    sizeBytes: audio.size,
+    durationSeconds,
+    uploadedBy: access.userId,
+  });
+
+  const transcript = String(formData.get("body") ?? "").trim();
+  const occurred = String(formData.get("occurredText") ?? "").trim();
+  const author = String(formData.get("authorName") ?? "").trim();
+  const memoryId = randomUUID();
+  const memoryPersonName = await personNameById(treeId, personId);
+  await db.insert(memories).values({
+    id: memoryId,
+    personId,
+    kind: "voice",
+    body: transcript,
+    occurredText: occurred || null,
+    authorName: author || null,
+    authorUserId: access.userId,
+    mediaId,
+  });
+  await touchTree(treeId);
+  await logActivity({
+    treeId,
+    actorUserId: access.userId,
+    actorName: await actorNameOf(access.userId),
+    action: "add_memory",
+    targetType: "memory",
+    targetId: memoryId,
+    targetLabel: memoryPersonName ?? "a relative",
+    detail: {
+      personIds: [personId],
+      personName: memoryPersonName,
+      voice: true,
+      durationSeconds,
+    },
+    // Audio files are swept on delete, so voice memories are not undoable.
+    undoable: false,
+  });
+  revalidateTree(treeId, personId);
+  return { ok: true, message: "Voice memory saved" };
 }
 
 export async function deleteMemoryAction(

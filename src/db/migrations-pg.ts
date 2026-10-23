@@ -534,5 +534,11 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
        EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
       `CREATE INDEX IF NOT EXISTS "ask_links_tree_idx" ON "ask_links" ("tree_id")`,
     ],
+  },  {
+    // Voice memories — audio duration on media rows (issue #36, P4.1)
+    name: "0010_media_duration",
+    statements: [
+      `ALTER TABLE "media" ADD COLUMN IF NOT EXISTS "duration_seconds" integer`,
+    ],
   },
 ];
