@@ -31,7 +31,7 @@ npm test        # unit tests for pure logic
 
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · SQLite + Drizzle ORM (Postgres-ready) · custom SVG tree canvas.
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · SQLite + Drizzle ORM (Postgres-ready) · custom SVG tree canvas with alternate layouts (`hourglass` · `pedigree` · `descendant` · `fan` · `list`, `?layout=` + `localStorage`, compact density toggle).
 
 ## Databases
 

@@ -9,6 +9,7 @@ import {
   ROW_GAP,
   type LayoutResult,
 } from "@/lib/layout/engine";
+import { layoutWithKind, LAYOUT_KINDS, LAYOUT_LABEL, type LayoutKind } from "@/lib/layout/strategies";
 import { coupleEdgeD, parentChildEdgeD } from "@/lib/layout/edges";
 import {
   displayName,
@@ -87,6 +88,11 @@ interface Props {
 }
 
 const MIN_W = 360;
+const COMPACT_W = 120;
+const COMPACT_H = 52;
+function layoutDims(compact: boolean) {
+  return compact ? { NODE_W: COMPACT_W, NODE_H: COMPACT_H } : { NODE_W, NODE_H };
+}
 
 export function TreeCanvas({
   treeId,
@@ -108,19 +114,51 @@ export function TreeCanvas({
 }: Props) {
   const editable = canEdit ?? !readOnly;
   const exportsOn = showExport ?? !readOnly;
+  const [layoutKind, setLayoutKind] = useState<LayoutKind>("hourglass");
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const k = params.get("layout") as LayoutKind | null;
+      if (k && (LAYOUT_KINDS as string[]).includes(k)) setLayoutKind(k);
+      const c = params.get("compact");
+      if (c === "1") setCompact(true);
+      const saved = localStorage.getItem("famlink:layout");
+      if (saved && (LAYOUT_KINDS as string[]).includes(saved) && !k) setLayoutKind(saved as LayoutKind);
+      const savedC = localStorage.getItem("famlink:compact");
+      if (savedC === "1" && !c) setCompact(true);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("famlink:layout", layoutKind);
+      localStorage.setItem("famlink:compact", compact ? "1" : "0");
+      const params = new URLSearchParams(window.location.search);
+      params.set("layout", layoutKind);
+      if (compact) params.set("compact", "1"); else params.delete("compact");
+      const qs = params.toString();
+      const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+      window.history.replaceState(null, "", url);
+    } catch {}
+  }, [layoutKind, compact]);
   const layout: LayoutResult = useMemo(
     () =>
-      layoutTree({
-        persons: persons.map((p) => ({
-          id: p.id,
-          birthHint: p.birthDateText,
-        })),
-        unions,
-        links,
-        focusPersonId,
-      }),
-    [persons, unions, links, focusPersonId],
+      layoutWithKind(
+        {
+          persons: persons.map((p) => ({
+            id: p.id,
+            birthHint: p.birthDateText,
+          })),
+          unions,
+          links,
+          focusPersonId,
+        },
+        layoutKind,
+        compact,
+      ),
+    [persons, unions, links, focusPersonId, layoutKind, compact],
   );
+  const dims = layoutDims(compact);
   const personById = useMemo(
     () => new Map(persons.map((p) => [p.id, p])),
     [persons],
@@ -144,10 +182,10 @@ export function TreeCanvas({
     let maxX = -Infinity;
     let maxY = -Infinity;
     for (const n of layout.nodes) {
-      minX = Math.min(minX, n.x - NODE_W / 2);
-      maxX = Math.max(maxX, n.x + NODE_W / 2);
-      minY = Math.min(minY, n.y - NODE_H / 2);
-      maxY = Math.max(maxY, n.y + NODE_H / 2);
+      minX = Math.min(minX, n.x - dims.NODE_W / 2);
+      maxX = Math.max(maxX, n.x + dims.NODE_W / 2);
+      minY = Math.min(minY, n.y - dims.NODE_H / 2);
+      maxY = Math.max(maxY, n.y + dims.NODE_H / 2);
     }
     return { minX, minY, maxX, maxY };
   }, [layout]);
@@ -432,6 +470,7 @@ export function TreeCanvas({
           )}
         </div>
         <div className="flex items-center gap-1.5">
+          <LayoutSwitcher kind={layoutKind} onKind={setLayoutKind} compact={compact} onCompact={setCompact} />
           {persons.length > 5 && (
             <TreeSearch persons={persons} onLocate={locatePerson} />
           )}
@@ -592,6 +631,8 @@ export function TreeCanvas({
             nodeById={nodeById}
             unionById={unionById}
             hiddenRelations={hiddenRelations}
+            nodeW={dims.NODE_W}
+            nodeH={dims.NODE_H}
           />
           {layout.nodes.map((n) => {
             const p = personById.get(n.id);
@@ -638,6 +679,8 @@ export function TreeCanvas({
                 onHover={setHoverId}
                 onQuickAdd={(relation) => setModal({ anchorId: n.id, relation })}
                 dimmed={!isFiltered}
+                compact={compact}
+                isList={layoutKind === "list"}
               />
             );
           })}
@@ -653,6 +696,19 @@ export function TreeCanvas({
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function LayoutSwitcher({ kind, onKind, compact, onCompact }: { kind: LayoutKind; onKind: (k: LayoutKind) => void; compact: boolean; onCompact: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      <select value={kind} onChange={(e) => onKind(e.target.value as LayoutKind)} className="h-8 rounded-lg border border-line bg-paper px-2 text-xs text-ink focus:border-evergreen focus:outline-none" title="Layout" aria-label="Layout">
+        {LAYOUT_KINDS.map((k) => (
+          <option key={k} value={k}>{LAYOUT_LABEL[k]}</option>
+        ))}
+      </select>
+      <button type="button" onClick={() => onCompact(!compact)} aria-pressed={compact} title={compact ? "Compact on" : "Compact off"} className={`h-8 rounded-lg border px-2 text-xs ${compact ? "border-evergreen bg-evergreen-mist text-evergreen-deep" : "border-line bg-paper text-ink-soft"}`}>Compact</button>
     </div>
   );
 }
@@ -695,12 +751,16 @@ function Edges({
   nodeById,
   unionById,
   hiddenRelations,
+  nodeW = NODE_W,
+  nodeH = NODE_H,
 }: {
   unions: CanvasUnion[];
   links: CanvasLink[];
   nodeById: Map<string, { x: number; y: number }>;
   unionById: Map<string, CanvasUnion>;
   hiddenRelations?: Set<RelationKind>;
+  nodeW?: number;
+  nodeH?: number;
 }) {
   return (
     <g
@@ -713,7 +773,7 @@ function Edges({
         const b = u.partnerBId ? nodeById.get(u.partnerBId) : null;
         if (!a || !b) return null;
         // Dim multi-spouse couples slightly? Already same style — keep solid for now.
-        return <path key={`c-${u.id}`} d={coupleEdgeD(a, b, NODE_W)} stroke="var(--color-ink-soft)" strokeWidth={1.5} opacity={0.55} />;
+        return <path key={`c-${u.id}`} d={coupleEdgeD(a, b, nodeW)} stroke="var(--color-ink-soft)" strokeWidth={1.5} opacity={0.55} />;
       })}
       {links.map((l) => {
         const u = unionById.get(l.unionId);
@@ -732,11 +792,11 @@ function Edges({
         } else if (a || b) {
           const single = (a ?? b) as { x: number; y: number };
           sx = single.x;
-          sy = single.y + NODE_H / 2 + 3;
+          sy = single.y + nodeH / 2 + 3;
         } else {
           return null;
         }
-        const ty = child.y - NODE_H / 2 - 1;
+        const ty = child.y - nodeH / 2 - 1;
         const d = parentChildEdgeD(sx, sy, child.x, ty);
         const label = relationLabel(rel);
         return (
@@ -1033,6 +1093,8 @@ function PersonNode({
   personHref = null,
   canEdit = true,
   dimmed = false,
+  compact = false,
+  isList = false,
   onHover,
   onQuickAdd,
 }: {
@@ -1051,16 +1113,19 @@ function PersonNode({
   /** Quick-add pills + re-root button (owner/editor only). */
   canEdit?: boolean;
   dimmed?: boolean;
+  compact?: boolean;
+  isList?: boolean;
   onHover: (id: string | null) => void;
   onQuickAdd: (relation: Relation) => void;
 }) {
   const [focusPending, startFocusTransition] = useTransition();
+  const dims = compact ? { W: COMPACT_W, H: COMPACT_H } : { W: NODE_W, H: NODE_H };
   const redacted = person.redacted === true;
   const name = redacted ? REDACTED_NAME : displayName(person);
   const isUnknown = !redacted && name === "Unknown";
   const dates = lifeLine(person);
-  const left = x - NODE_W / 2;
-  const top = y - NODE_H / 2;
+  const left = x - dims.W / 2;
+  const top = y - dims.H / 2;
 
   // Quick-add pills sit in a compact 2×2 grid directly above the card,
   // within its width — the cursor can always reach them without leaving
@@ -1077,8 +1142,8 @@ function PersonNode({
     <>
       <rect
         className="tnode-card"
-        width={NODE_W}
-        height={NODE_H}
+        width={dims.W}
+        height={dims.H}
         rx={14}
         fill={isUnknown ? "transparent" : "var(--color-card)"}
         stroke={isFocus ? "var(--color-evergreen)" : isUnknown ? "var(--color-ink-soft)" : "var(--color-line)"}
@@ -1086,7 +1151,7 @@ function PersonNode({
         strokeDasharray={isUnknown ? "5 5" : undefined}
       />
       <text
-        x={NODE_W / 2}
+        x={dims.W / 2}
         y={30}
         textAnchor="middle"
         fontSize={15}
@@ -1103,11 +1168,11 @@ function PersonNode({
       >
         {name}
       </text>
-      <text x={NODE_W / 2} y={48} textAnchor="middle" fontSize={10.5} fill="var(--color-ink-soft)" opacity={0.85}>
+      <text x={dims.W / 2} y={48} textAnchor="middle" fontSize={10.5} fill="var(--color-ink-soft)" opacity={0.85}>
         {dates}
       </text>
       {person.memoryCount > 0 && (
-        <text x={NODE_W - 12} y={22} textAnchor="end" fontSize={11} fill="var(--color-gold)">
+        <text x={dims.W - 12} y={22} textAnchor="end" fontSize={11} fill="var(--color-gold)">
           ✻ {person.memoryCount}
         </text>
       )}
@@ -1122,10 +1187,14 @@ function PersonNode({
       onMouseEnter={() => onHover(person.id)}
       onMouseLeave={() => onHover(null)}
       opacity={dimmed ? 0.18 : 1}
+      tabIndex={isList ? 0 : undefined}
+      role={isList ? "listitem" : undefined}
+      onKeyDown={isList ? (e) => { if (e.key === "Enter" && linked && personHref) window.location.href = personHref; } : undefined}
+      style={isList ? { outline: "none" } : undefined}
     >
       {/* Resting hit area: the card plus a small margin — narrow enough
           never to steal hover from a neighbouring card (couple gap is 24). */}
-      <rect x={-12} y={-20} width={NODE_W + 24} height={NODE_H + 48} fill="transparent" />
+      <rect x={-12} y={-20} width={dims.W + 24} height={dims.H + 48} fill="transparent" />
       {/* While hovered, an invisible halo bridges the card and everything
           that appeared because of the hover (pills above, center button
           below), so moving toward a control never drops the hover. It
@@ -1134,8 +1203,8 @@ function PersonNode({
         <rect
           x={-16}
           y={-58}
-          width={NODE_W + 32}
-          height={NODE_H + 106}
+          width={dims.W + 32}
+          height={dims.H + 106}
           fill="transparent"
         />
       )}
@@ -1150,8 +1219,8 @@ function PersonNode({
           className="node-flash"
           x={-7}
           y={-7}
-          width={NODE_W + 14}
-          height={NODE_H + 14}
+          width={dims.W + 14}
+          height={dims.H + 14}
           rx={19}
           fill="none"
           stroke="var(--color-gold)"
@@ -1159,14 +1228,14 @@ function PersonNode({
         />
       )}
       {labelDots.length > 0 && (
-        <g transform={`translate(${NODE_W / 2 - (labelDots.length * 8) / 2}, ${NODE_H + 4})`}>
+        <g transform={`translate(${dims.W / 2 - (labelDots.length * 8) / 2}, ${dims.H + 4})`}>
           {labelDots.map((lb, i) => (
             <circle key={lb.id} cx={i * 8 + 4} cy={0} r={3.2} fill={labelColorFor(lb.name, lb.color)} stroke="white" strokeWidth={0.7} />
           ))}
         </g>
       )}
       {!dimmed && person.customFields && person.customFields.length > 0 && (
-        <g transform={`translate(${NODE_W - 8}, 6)`}>
+        <g transform={`translate(${dims.W - 8}, 6)`}>
           <circle r={4} fill="var(--color-gold)" opacity={0.9} />
           <text textAnchor="middle" dominantBaseline="middle" fontSize={7} fill="white" fontWeight={700}>
             ·
@@ -1207,7 +1276,7 @@ function PersonNode({
               role="button"
               tabIndex={0}
               aria-label={`Center the tree on ${name}`}
-              transform={`translate(${NODE_W / 2 - 45}, ${NODE_H + 9})`}
+              transform={`translate(${dims.W / 2 - 45}, ${dims.H + 9})`}
               className="cursor-pointer"
               opacity={focusPending ? 0.5 : 1}
               onClick={(e) => {
