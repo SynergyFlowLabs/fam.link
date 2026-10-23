@@ -17,6 +17,17 @@ import {
   validateSource,
 } from "@/lib/person-events";
 import { logActivity } from "@/lib/activity-log";
+import { personWithinScope } from "@/lib/branch-writes";
+
+/** Branch-scoped editors may edit only inside their branch (issue #34). */
+async function scopeGuard(
+  treeId: string,
+  scopePersonId: string | null | undefined,
+  personId: string,
+): Promise<string | null> {
+  if (await personWithinScope(scopePersonId, treeId, personId)) return null;
+  return "That person is outside your branch — ask the owner to widen your scope.";
+}
 
 async function actorNameOf(userId: string): Promise<string> {
   const rows = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
@@ -64,6 +75,8 @@ export async function createPersonEventAction(
   const access = await getTreeAccess(treeId, user.id);
   if (!access || (access.role !== "editor" && access.role !== "owner"))
     return err("Only editors and owners can add life events.");
+  const scopeErr = await scopeGuard(treeId, access.scopePersonId, personId);
+  if (scopeErr) return err(scopeErr);
 
   const personRows = await db
     .select({ id: persons.id, treeId: persons.treeId })
@@ -137,6 +150,8 @@ export async function updatePersonEventAction(
   const access = await getTreeAccess(treeId, user.id);
   if (!access || (access.role !== "editor" && access.role !== "owner"))
     return err("Only editors and owners can update events.");
+  const scopeErrU = await scopeGuard(treeId, access.scopePersonId, personId);
+  if (scopeErrU) return err(scopeErrU);
 
   const evRows = await db
     .select()
@@ -188,6 +203,8 @@ export async function deletePersonEventAction(
   const access = await getTreeAccess(treeId, user.id);
   if (!access || (access.role !== "editor" && access.role !== "owner"))
     return err("Only editors and owners can delete events.");
+  const scopeErrD = await scopeGuard(treeId, access.scopePersonId, personId);
+  if (scopeErrD) return err(scopeErrD);
 
   const evRows = await db
     .select()

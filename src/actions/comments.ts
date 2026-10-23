@@ -24,6 +24,7 @@ import {
 } from "@/lib/comments";
 import { commentTargetInfo, listMentionableMembers } from "@/lib/comment-queries";
 import { logActivity } from "@/lib/activity-log";
+import { personWithinScope } from "@/lib/branch-writes";
 import { actorNameOf } from "@/lib/actors";
 import { fail, type ActionResult } from "@/lib/action-result";
 
@@ -60,6 +61,8 @@ export async function addCommentAction(
 
   const target = await commentTargetInfo(treeId, targetType, targetId);
   if (!target) return fail("That person or memory is no longer in this tree.");
+  if (!(await personWithinScope(access.scopePersonId, treeId, target.personId)))
+    return fail("That person is outside your branch — ask the owner to widen your scope.");
 
   // One level deep: a reply to a reply attaches to the reply's root.
   const parentIdRaw = String(formData.get("parentId") ?? "");

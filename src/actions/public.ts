@@ -85,8 +85,7 @@ export async function createSuggestionAction(
     .where(eq(trees.id, treeId))
     .limit(1);
   const tree = treeRows[0];
-  if (!tree || tree.visibility !== "public")
-    return fail("That tree isn't public anymore.");
+  if (!tree) return fail("That tree doesn't exist anymore.");
 
   const personRows = await db
     .select({ id: persons.id })
@@ -95,10 +94,14 @@ export async function createSuggestionAction(
     .limit(1);
   if (!personRows[0]) return fail("That person is no longer in this tree.");
 
-  // Those who can already edit directly have no need for suggestions.
+  // Members suggest when they can't edit directly (viewer/commenter —
+  // issue #34); editors have no need. Anonymous suggesters need a public tree.
   const access = await getTreeAccess(treeId, user.id);
   if (access && canEdit(access.role)) {
     return fail("You can edit this tree directly — no suggestion needed.");
+  }
+  if (!access && tree.visibility !== "public") {
+    return fail("That tree isn't public anymore.");
   }
 
   const fields = parsePersonFields(formData);
@@ -137,6 +140,38 @@ export async function createSuggestionAction(
     note: note || null,
     createdBy: user.id,
   });
+
+  // Audit trail (issue #34): suggestions are contributions too.
+  try {
+    const { logActivity } = await import("@/lib/activity-log");
+    const nm = await db
+      .select({ first: persons.firstName, last: persons.lastName })
+      .from(persons)
+      .where(eq(persons.id, personId))
+      .limit(1);
+    const personName: string | null = nm[0]
+      ? [nm[0].first, nm[0].last].filter(Boolean).join(" ") || null
+      : null;
+    await logActivity({
+      treeId,
+      actorUserId: user.id,
+      actorName: user.name,
+      action: "suggest",
+      targetType: "person",
+      targetId: personId,
+      targetLabel: personName,
+      detail: {
+        personIds: [personId],
+        personName: personName ?? undefined,
+        suggestionKind: type,
+        relation: relation ?? undefined,
+      },
+      undoable: false,
+    });
+  } catch {
+    // feed is best-effort
+  }
+
   revalidateSuggestions(treeId);
   return {
     ok: true,
@@ -174,11 +209,18 @@ export async function reviewSuggestionAction(
   if (suggestion.status !== "pending")
     return fail("That suggestion was already reviewed.");
 
+  // Branch-scoped editors review only their branch (issue #34).
+  const { personWithinScope } = await import("@/lib/branch-writes");
+  if (!(await personWithinScope(access.scopePersonId, treeId, suggestion.personId))) {
+    return fail("That person is outside your branch — ask the owner to review it.");
+  }
+
   if (decision === "reject") {
     await db
       .update(treeSuggestions)
       .set({ status: "rejected", reviewedBy: user.id, reviewedAt: new Date() })
       .where(eq(treeSuggestions.id, suggestionId));
+    await logReview(treeId, user, suggestion, false);
     revalidateSuggestions(treeId);
     return { ok: true, message: "Suggestion rejected" };
   }
@@ -210,6 +252,7 @@ export async function reviewSuggestionAction(
     .update(treeSuggestions)
     .set({ status: "accepted", reviewedBy: user.id, reviewedAt: new Date() })
     .where(eq(treeSuggestions.id, suggestionId));
+  await logReview(treeId, user, suggestion, true);
   revalidateTree(treeId, suggestion.personId);
   revalidateSuggestions(treeId);
   return {
@@ -219,4 +262,43 @@ export async function reviewSuggestionAction(
         ? `Accepted — ${result.message} added to the tree`
         : `Accepted — ${result.message} updated`,
   };
+}
+
+/** Best-effort activity entry for a review decision (issue #34). */
+async function logReview(
+  treeId: string,
+  user: { id: string; name: string },
+  suggestion: { personId: string; type: "edit_person" | "add_relative"; relation: string | null },
+  approved: boolean,
+): Promise<void> {
+  try {
+    const { logActivity } = await import("@/lib/activity-log");
+    const nm = await db
+      .select({ first: persons.firstName, last: persons.lastName })
+      .from(persons)
+      .where(eq(persons.id, suggestion.personId))
+      .limit(1);
+    const personName = nm[0]
+      ? [nm[0].first, nm[0].last].filter(Boolean).join(" ") || undefined
+      : undefined;
+    await logActivity({
+      treeId,
+      actorUserId: user.id,
+      actorName: user.name,
+      action: "review_suggestion",
+      targetType: "person",
+      targetId: suggestion.personId,
+      targetLabel: personName ?? null,
+      detail: {
+        personIds: [suggestion.personId],
+        personName,
+        suggestionKind: suggestion.type,
+        relation: suggestion.relation ?? undefined,
+        suggestionApproved: approved,
+      },
+      undoable: false,
+    });
+  } catch {
+    // feed is best-effort
+  }
 }

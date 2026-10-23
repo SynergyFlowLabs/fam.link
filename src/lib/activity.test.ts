@@ -20,7 +20,7 @@ describe("activity", () => {
   it("isActivityAction guards the enum", () => {
     assert.ok(isActivityAction("add_person"));
     assert.equal(isActivityAction("nuke_tree"), false);
-    assert.equal(ACTIVITY_ACTIONS.length, 15);
+    assert.equal(ACTIVITY_ACTIONS.length, 17);
     assert.ok(isActivityAction("add_comment"));
     assert.ok(isActivityAction("delete_comment"));
   });
@@ -39,6 +39,9 @@ describe("activity", () => {
     assert.equal(describeActivity("delete_comment", { personName: "B", memory: true }, null), "removed a comment on a memory of B");
     assert.equal(describeActivity("resolve_comment", { personName: "Ahmed Raza", threadResolved: true }, null), "resolved the discussion on Ahmed Raza");
     assert.equal(describeActivity("resolve_comment", { personName: "B", memory: true, threadResolved: false }, null), "reopened the discussion on a memory of B");
+    assert.equal(describeActivity("suggest", { personName: "Ahmed Raza" }, null), "suggested an edit for Ahmed Raza");
+    assert.equal(describeActivity("suggest", { personName: "B", suggestionKind: "add_relative", relation: "mother" }, null), "suggested adding a mother of B");
+    assert.equal(describeActivity("review_suggestion", { personName: "B", suggestionApproved: true }, null), "approved a suggestion for B");
   });
 
   it("parseDetail tolerates garbage", () => {

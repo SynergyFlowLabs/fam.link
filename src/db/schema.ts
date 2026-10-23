@@ -632,6 +632,8 @@ export const activityFeed = sqliteTable(
         "add_comment",
         "delete_comment",
         "resolve_comment",
+        "suggest",
+        "review_suggestion",
         "undo",
       ],
     }).notNull(),

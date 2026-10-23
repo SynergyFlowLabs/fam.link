@@ -8,9 +8,19 @@ import { labelDefs, memories, personLabels, persons, memoryLabels } from "@/db/s
 import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canComment, canEdit } from "@/lib/roles";
+import { personWithinScope } from "@/lib/branch-writes";
 import { normalizeLabelName, labelKey } from "@/lib/labels";
 import { fail, OK, type ActionResult } from "@/lib/action-result";
 import { touchTree } from "@/lib/tree-mutations";
+
+async function requireScope(
+  scopePersonId: string | null | undefined,
+  treeId: string,
+  personId: string,
+): Promise<ActionResult | null> {
+  if (await personWithinScope(scopePersonId, treeId, personId)) return null;
+  return fail("That person is outside your branch — ask the owner to widen your scope.");
+}
 
 async function requireAccess(treeId: string, need: "edit" | "comment") {
   const user = await getCurrentUser();
@@ -77,8 +87,10 @@ export async function addLabelToPersonAction(formData: FormData): Promise<Action
   const labelName = String(formData.get("labelName") ?? formData.get("name") ?? "");
   const labelIdRaw = String(formData.get("labelId") ?? "").trim();
 
-  const { error } = await requireAccess(treeId, "edit");
-  if (error) return error;
+  const { error, access } = await requireAccess(treeId, "edit");
+  if (error || !access) return error ?? fail("You don't have access to that tree.");
+  const scopeFailP = await requireScope(access.scopePersonId, treeId, personId);
+  if (scopeFailP) return scopeFailP;
 
   if (!personId) return fail("That person is no longer in this tree.");
   const personRows = await db
@@ -157,6 +169,9 @@ export async function addLabelToMemoryAction(formData: FormData): Promise<Action
     .where(eq(memories.id, memoryId))
     .limit(1);
   if (!memRows[0]) return fail("That memory is no longer there.");
+  const { access } = await requireAccess(treeId, "comment");
+  const scopeFailM = await requireScope(access?.scopePersonId, treeId, memRows[0].personId);
+  if (scopeFailM) return scopeFailM;
   const personRows = await db
     .select({ id: persons.id })
     .from(persons)

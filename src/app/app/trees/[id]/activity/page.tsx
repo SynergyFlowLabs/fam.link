@@ -215,6 +215,8 @@ const ACTION_LABEL: Record<ActivityAction, string> = {
   add_comment: "Comments",
   delete_comment: "Comment removals",
   resolve_comment: "Resolved threads",
+  suggest: "Suggestions",
+  review_suggestion: "Suggestion reviews",
   undo: "Undos",
 };
 

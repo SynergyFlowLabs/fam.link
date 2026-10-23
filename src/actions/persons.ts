@@ -61,11 +61,27 @@ async function requireUser(): Promise<{ id: string } | null> {
 
 async function accessFor(
   treeId: string,
-): Promise<{ userId: string; role: Role } | null> {
+): Promise<{ userId: string; role: Role; scopePersonId: string | null } | null> {
   const user = await getCurrentUser();
   if (!user) return null;
   const access = await getTreeAccess(treeId, user.id);
-  return access ? { userId: user.id, role: access.role } : null;
+  return access
+    ? { userId: user.id, role: access.role, scopePersonId: access.scopePersonId ?? null }
+    : null;
+}
+
+/**
+ * Branch-scoped members may mutate only inside their branch (issue #34).
+ * Returns the failure ActionResult when out of scope, else null.
+ */
+async function scopeGuard(
+  access: { scopePersonId: string | null },
+  treeId: string,
+  personId: string,
+): Promise<ActionResult | null> {
+  const { personWithinScope } = await import("@/lib/branch-writes");
+  if (await personWithinScope(access.scopePersonId, treeId, personId)) return null;
+  return fail("That person is outside your branch — ask the owner to widen your scope.");
 }
 
 /** Editor-and-up guard for redirecting (void) actions. Null → redirect /app. */
@@ -131,6 +147,9 @@ export async function addRelativeAction(
   if (denied) return denied;
   const anchorId = String(formData.get("anchorId") ?? "");
   const relation = String(formData.get("relation") ?? "") as Relation;
+  const myAccess = await accessFor(treeId);
+  const scopeFail = myAccess ? await scopeGuard(myAccess, treeId, anchorId) : fail("You don't have access to that tree.");
+  if (scopeFail) return scopeFail;
   const fields = parsePersonFields(formData);
   const result = await addRelativeToTree(treeId, anchorId, relation, fields);
   if (!result.ok) return result;
@@ -175,6 +194,9 @@ export async function updatePersonAction(
   if (denied) return denied;
   const personId = String(formData.get("personId") ?? "");
   if (!personId) return fail("That person is no longer in this tree.");
+  const myAccess = await accessFor(treeId);
+  const scopeFail = myAccess ? await scopeGuard(myAccess, treeId, personId) : fail("You don't have access to that tree.");
+  if (scopeFail) return scopeFail;
 
   const fields = parsePersonFields(formData);
   const prevRows = await db
@@ -234,6 +256,8 @@ export async function deletePersonAction(formData: FormData): Promise<void> {
   if (!tree) redirect("/app");
   const personId = String(formData.get("personId") ?? "");
   if (!personId) return;
+  const myAccess = await accessFor(treeId);
+  if (myAccess && (await scopeGuard(myAccess, treeId, personId))) redirect("/app");
 
   // Snapshot for the activity feed's undo (issue #31): person row + the
   // unions about to be rewritten + child links, captured BEFORE changes.
@@ -342,6 +366,11 @@ export async function addMemoryAction(
   const treeId = String(formData.get("treeId") ?? "");
   const access = await accessFor(treeId);
   if (!access) return fail("You don't have access to that tree.");
+  {
+    const targetId = String(formData.get("personId") ?? "");
+    const scopeFail = await scopeGuard(access, treeId, targetId);
+    if (scopeFail) return scopeFail;
+  }
   if (!canComment(access.role)) {
     return fail(
       "Sharing memories here needs the Commenter role — ask its owner for access.",
@@ -447,6 +476,7 @@ export async function deleteMemoryAction(
   const memorySnap = rows[0].memory;
   const targetPersonId = memorySnap.personId;
   const memoryPersonName = await personNameById(treeId, targetPersonId);
+  {const scopeFail1 = await scopeGuard(access, treeId, targetPersonId); if (scopeFail1) return scopeFail1;}
 
   await db.delete(memories).where(eq(memories.id, memoryId));
   // Discussion threads on this memory go with it (issue #32).
