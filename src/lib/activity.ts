@@ -25,6 +25,7 @@ export const ACTIVITY_ACTIONS = [
   "resolve_comment",
   "suggest",
   "review_suggestion",
+  "ask",
   "undo",
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
@@ -68,6 +69,8 @@ export function actionVerb(action: ActivityAction): string {
       return "suggested a change for";
     case "review_suggestion":
       return "reviewed a suggestion for";
+    case "ask":
+      return "asked a relative about";
     case "undo":
       return "undid an action in";
   }
@@ -93,6 +96,8 @@ export interface ActivityDetail {
   /** For suggestion entries. */
   suggestionKind?: string;
   suggestionApproved?: boolean;
+  /** For ask entries: the question being sent out. */
+  question?: string;
   [key: string]: unknown;
 }
 
@@ -165,6 +170,10 @@ export function describeActivity(action: ActivityAction, detail: ActivityDetail,
         : `suggested an edit for ${name}`;
     case "review_suggestion":
       return `${detail.suggestionApproved ? "approved" : "rejected"} a suggestion for ${name}`;
+    case "ask":
+      return detail.question
+        ? `asked a relative: “${detail.question}”`
+        : `asked a relative about ${name}`;
     case "undo":
       return `undid: ${detail.undoneSummary ?? "an earlier change"}`;
   }

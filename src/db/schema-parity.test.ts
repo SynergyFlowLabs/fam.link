@@ -25,6 +25,7 @@ import type {
   PlaceGeocode,
   ActivityFeed,
   Comment,
+  AskLink,
 } from "./schema.ts";
 import type {
   PgMemory,
@@ -47,6 +48,7 @@ import type {
   PgPlaceGeocode,
   PgActivityFeed,
   PgComment,
+  PgAskLink,
 } from "./schema-pg.ts";
 
 /**
@@ -82,6 +84,7 @@ const SQLITE_TABLES = {
   placeGeocodes: sqlite.placeGeocodes,
   activityFeed: sqlite.activityFeed,
   comments: sqlite.comments,
+  askLinks: sqlite.askLinks,
 } as const;
 
 const PG_TABLES = {
@@ -108,6 +111,7 @@ const PG_TABLES = {
   placeGeocodes: pg.placeGeocodes,
   activityFeed: pg.activityFeed,
   comments: pg.comments,
+  askLinks: pg.askLinks,
 } as const;
 
 describe("schema parity (sqlite ↔ postgres)", () => {
@@ -181,4 +185,6 @@ export type SchemaParityCheck = [
   ActivityFeed extends PgActivityFeed ? true : never,
   PgComment extends Comment ? true : never,
   Comment extends PgComment ? true : never,
+  PgAskLink extends AskLink ? true : never,
+  AskLink extends PgAskLink ? true : never,
 ];

@@ -501,6 +501,7 @@ export const activityFeed = pgTable(
         "resolve_comment",
         "suggest",
         "review_suggestion",
+        "ask",
         "undo",
       ],
     }).notNull(),
@@ -565,6 +566,34 @@ export const comments = pgTable(
 );
 
 export type PgComment = typeof comments.$inferSelect;
+
+/**
+ * Ask-a-relative links. Mirrors schema.ts askLinks exactly
+ * (schema-parity.test.ts).
+ */
+export const askLinks = pgTable(
+  "ask_links",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    token: text("token").notNull().unique(),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at"),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (t) => [index("ask_links_tree_idx").on(t.treeId)],
+);
+
+export type PgAskLink = typeof askLinks.$inferSelect;
 
 
 export type PgUser = typeof users.$inferSelect;
