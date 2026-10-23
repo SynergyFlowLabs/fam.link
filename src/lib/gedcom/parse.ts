@@ -25,6 +25,8 @@ export interface ParsedIndividual {
   hasDeathEvent: boolean;
   /** NOTE payloads (CONT/CONC already joined), "MEMORY: " prefix intact. */
   notes: string[];
+  /** Generic 1 EVEN / 1 RESI … timeline entries (for fam.link person_events). */
+  events: { kind: string | null; dateText: string | null; placeText: string | null; note: string | null; source: string | null }[];
 }
 
 export interface ParsedFamily {
@@ -32,6 +34,8 @@ export interface ParsedFamily {
   husbandXref: string | null;
   wifeXref: string | null;
   childXrefs: string[];
+  /** Per-child PEDI/ADOP/ FREL etc — defaults to biological */
+  childRelations: Map<string, "biological" | "adoptive" | "step" | "foster">;
   marriageDateText: string | null;
   marriagePlaceText: string | null;
   divorced: boolean;
@@ -126,6 +130,7 @@ export function parseGedcom(text: string): ParsedGedcom {
         deathPlace: null,
         hasDeathEvent: false,
         notes: [],
+        events: [],
       };
       // 1 BIRT / 1 DEAT open a nested event; 2 DATE / 2 PLAC fill it.
       // 1 NOTE opens a note; 2 CONT (newline) / 2 CONC (glued) extend it.
@@ -137,10 +142,21 @@ export function parseGedcom(text: string): ParsedGedcom {
         note = null;
       };
 
+      let currentEvent: { kind: string | null; dateText: string | null; placeText: string | null; note: string | null; source: string | null } | null = null;
+      const flushEvent = () => {
+        if (currentEvent) {
+          // Only keep events with something to show — at least kind or date/place/note/source
+          if (currentEvent.kind || currentEvent.dateText || currentEvent.placeText || currentEvent.note || currentEvent.source) {
+            indi.events.push({ ...currentEvent });
+          }
+          currentEvent = null;
+        }
+      };
       for (let j = i + 1; j < lines.length && lines[j].level > 0; j++) {
         const l = lines[j];
         if (l.level === 1) {
           flushNote();
+          flushEvent();
           inEvent = null;
           switch (l.tag) {
             case "NAME":
@@ -161,11 +177,25 @@ export function parseGedcom(text: string): ParsedGedcom {
               inEvent = "DEAT";
               indi.hasDeathEvent = true; // even "1 DEAT Y" with no dates
               break;
+            case "EVEN":
+              inEvent = "EVEN" as unknown as typeof inEvent;
+              currentEvent = { kind: l.value || null, dateText: null, placeText: null, note: null, source: null };
+              break;
+            case "RESI":
+              inEvent = "EVEN" as unknown as typeof inEvent;
+              currentEvent = { kind: "relocation", dateText: null, placeText: l.value || null, note: null, source: null };
+              break;
+            case "OCCU":
+            case "RELI":
+            case "EDUC":
+              inEvent = "EVEN" as unknown as typeof inEvent;
+              currentEvent = { kind: "custom", dateText: null, placeText: null, note: l.value || null, source: null };
+              break;
             case "NOTE":
               note = l.value;
               break;
             default:
-              break; // occupation, residence, sources, media refs … not imported
+              break;
           }
         } else if (l.level >= 2) {
           if (note !== null && (l.tag === "CONT" || l.tag === "CONC")) {
@@ -178,9 +208,20 @@ export function parseGedcom(text: string): ParsedGedcom {
             indi.deathDateText = l.value;
           } else if (inEvent === "DEAT" && l.level === 2 && l.tag === "PLAC" && l.value) {
             indi.deathPlace = l.value;
+          } else if (currentEvent && l.level === 2) {
+            if (l.tag === "TYPE" && l.value) currentEvent.kind = l.value;
+            else if (l.tag === "DATE" && l.value) currentEvent.dateText = l.value;
+            else if (l.tag === "PLAC" && l.value) currentEvent.placeText = l.value;
+            else if (l.tag === "NOTE" && l.value) currentEvent.note = currentEvent.note ? currentEvent.note + "\n" + l.value : l.value;
+            else if (l.tag === "SOUR" && l.value) currentEvent.source = currentEvent.source ? currentEvent.source + "; " + l.value : l.value;
+          }
+          // Level >=3 continuations for notes inside events (e.g. 3 CONT)
+          if (currentEvent && currentEvent.note && (l.tag === "CONT" || l.tag === "CONC")) {
+            // Only if we are inside an EVEN note continuation — handled loosely
           }
         }
       }
+      flushEvent();
       flushNote();
       if (indi.altNames.length > 0) {
         warnings.push(`${xref} has ${indi.altNames.length + 1} names — only the first was imported.`);
@@ -203,23 +244,47 @@ export function parseGedcom(text: string): ParsedGedcom {
         husbandXref: null,
         wifeXref: null,
         childXrefs: [],
+        childRelations: new Map(),
         marriageDateText: null,
         marriagePlaceText: null,
         divorced: false,
       };
       let inMarr = false;
+      let lastChildXref: string | null = null;
+      const normalizeChildRel = (tag: string, value: string): "biological" | "adoptive" | "step" | "foster" | null => {
+        const t = tag.toUpperCase();
+        const v = value.toLowerCase();
+        if (t === "ADOP" || (t === "PEDI" && v.includes("adopt"))) return "adoptive";
+        if (t === "PEDI" && v.includes("step")) return "step";
+        if (t === "PEDI" && v.includes("foster")) return "foster";
+        if (t === "FREL" && v.includes("adopt")) return "adoptive";
+        if (t === "FREL" && v.includes("step")) return "step";
+        if (t === "FREL" && v.includes("foster")) return "foster";
+        if (t === "MREL" && v.includes("adopt")) return "adoptive";
+        if (t === "MREL" && v.includes("step")) return "step";
+        if (t === "MREL" && v.includes("foster")) return "foster";
+        if (t === "ADOP") return "adoptive";
+        return null;
+      };
       for (let j = i + 1; j < lines.length && lines[j].level > 0; j++) {
         const l = lines[j];
         if (l.level === 1) {
           inMarr = false;
+          lastChildXref = null;
           if (l.tag === "HUSB" && l.value) fam.husbandXref = l.value;
           else if (l.tag === "WIFE" && l.value) fam.wifeXref = l.value;
-          else if (l.tag === "CHIL" && l.value) fam.childXrefs.push(l.value);
+          else if (l.tag === "CHIL" && l.value) { fam.childXrefs.push(l.value); lastChildXref = l.value; }
           else if (l.tag === "MARR") inMarr = true;
           else if (l.tag === "DIV") fam.divorced = true;
-        } else if (l.level === 2 && inMarr) {
-          if (l.tag === "DATE" && l.value) fam.marriageDateText = l.value;
-          else if (l.tag === "PLAC" && l.value) fam.marriagePlaceText = l.value;
+        } else if (l.level === 2) {
+          if (inMarr) {
+            if (l.tag === "DATE" && l.value) fam.marriageDateText = l.value;
+            else if (l.tag === "PLAC" && l.value) fam.marriagePlaceText = l.value;
+          }
+          if (lastChildXref && ["ADOP","PEDI","FREL","MREL"].includes(l.tag)) {
+            const kind = normalizeChildRel(l.tag, l.value || "");
+            if (kind) fam.childRelations.set(lastChildXref, kind);
+          }
         }
       }
       families.push(fam);

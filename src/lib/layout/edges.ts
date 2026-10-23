@@ -39,6 +39,29 @@ export function coupleEdgeD(a: EdgePoint, b: EdgePoint, nodeW: number): string {
  * gap, rounded corner, vertical drop into the child. Children of the same
  * union share the bus height because it depends only on sy and ty.
  */
+export function relationStrokeProps(relation?: string | null): { strokeDasharray?: string; stroke?: string } {
+  switch (relation) {
+    case "adoptive":
+      return { strokeDasharray: "8 5" };
+    case "step":
+      return { strokeDasharray: "4 6" };
+    case "foster":
+      return { strokeDasharray: "2 5" };
+    case "biological":
+    default:
+      return {};
+  }
+}
+
+export function relationLabel(relation?: string | null): string {
+  switch (relation) {
+    case "adoptive": return "adopted";
+    case "step": return "step";
+    case "foster": return "foster";
+    default: return "biological";
+  }
+}
+
 export function parentChildEdgeD(
   sx: number,
   sy: number,

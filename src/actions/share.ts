@@ -23,6 +23,15 @@ export async function createShareLinkAction(
   const tree = await ownedTree(treeId, user.id);
   if (!tree) return fail("That tree no longer exists.");
 
+  const scopePersonIdRaw = String(formData.get("scopePersonId") ?? "").trim();
+  let scopePersonId: string | null = null;
+  if (scopePersonIdRaw) {
+    const { persons } = await import("@/db/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const rows = await db.select({ id: persons.id }).from(persons).where(and(eq(persons.id, scopePersonIdRaw), eq(persons.treeId, treeId))).limit(1);
+    if (rows.length === 0) return fail("That person is not in this tree.");
+    scopePersonId = scopePersonIdRaw;
+  }
   const token = randomBytes(24).toString("base64url");
   await db.insert(shareLinks).values({
     id: randomUUID(),
@@ -30,6 +39,7 @@ export async function createShareLinkAction(
     token,
     label: label || null,
     createdBy: user.id,
+    scopePersonId,
   });
   revalidatePath(`/app/trees/${treeId}`);
   return { ok: true, token };

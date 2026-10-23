@@ -29,6 +29,8 @@ export interface CanvasPerson {
   labels?: LabelChip[];
   /** Custom field values for this person. */
   customFields?: CustomFieldChip[];
+  /** Life-event count — cleared on redact for privacy (timeline stays private for living relatives). */
+  eventCount?: number;
   /** True when details are hidden for a living person on a public share view. */
   redacted?: boolean;
 }
@@ -40,9 +42,12 @@ export interface CanvasUnion {
   status: "married" | "partners" | "divorced" | "separated" | "widowed" | null;
 }
 
+export type RelationKind = "biological" | "adoptive" | "step" | "foster";
+
 export interface CanvasLink {
   unionId: string;
   childId: string;
+  relation?: RelationKind;
 }
 
 export function displayName(p: {
@@ -88,6 +93,7 @@ export function redactPerson(p: CanvasPerson): CanvasPerson {
     memoryCount: 0,
     labels: [],
     customFields: [],
+    eventCount: 0,
     redacted: true,
   };
 }

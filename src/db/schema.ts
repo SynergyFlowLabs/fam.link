@@ -236,6 +236,7 @@ export const shareLinks = sqliteTable(
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
     revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [index("share_links_tree_idx").on(t.treeId)],
 );
@@ -291,6 +292,7 @@ export const treeMembers = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [
     uniqueIndex("tree_members_tree_user_idx").on(t.treeId, t.userId),
@@ -325,6 +327,7 @@ export const treeInvites = sqliteTable(
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
     revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [
     index("tree_invites_tree_idx").on(t.treeId),
@@ -522,12 +525,48 @@ export const memoryCustomValues = sqliteTable(
   ],
 );
 
+/**
+ * Life events per person — structured timeline entries (birth, death,
+ * marriage, divorce, relocation, custom). Fuzzy dates preserved verbatim;
+ * ordering is best-effort via helper in src/lib/person-events.ts.
+ * Source citation (“how do you know?”) is a free-text provenance field.
+ */
+export const personEvents = sqliteTable(
+  "person_events",
+  {
+    id: text("id").primaryKey(),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    kind: text("kind", {
+      enum: ["birth", "death", "marriage", "divorce", "relocation", "custom"],
+    }).notNull(),
+    // Fuzzy, user-typed (e.g. "c. 1947", "Eid 1994", "before Partition")
+    dateText: text("date_text"),
+    placeText: text("place_text"),
+    note: text("note"),
+    // Lightweight provenance — FamilySearch-style source citation
+    source: text("source"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index("person_events_person_idx").on(t.personId),
+    index("person_events_person_kind_idx").on(t.personId, t.kind),
+  ],
+);
+
 export type LabelDef = typeof labelDefs.$inferSelect;
 export type PersonLabel = typeof personLabels.$inferSelect;
 export type MemoryLabel = typeof memoryLabels.$inferSelect;
 export type CustomFieldDef = typeof customFieldDefs.$inferSelect;
 export type PersonCustomValue = typeof personCustomValues.$inferSelect;
 export type MemoryCustomValue = typeof memoryCustomValues.$inferSelect;
+export type PersonEvent = typeof personEvents.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type Tree = typeof trees.$inferSelect;
@@ -536,6 +575,7 @@ export type Union = typeof unions.$inferSelect;
 export type ParentChild = typeof parentChild.$inferSelect;
 export type Memory = typeof memories.$inferSelect;
 export type Media = typeof media.$inferSelect;
+export type PersonEventRow = typeof personEvents.$inferSelect;
 export type ShareLink = typeof shareLinks.$inferSelect;
 export type TreeMember = typeof treeMembers.$inferSelect;
 export type TreeInvite = typeof treeInvites.$inferSelect;

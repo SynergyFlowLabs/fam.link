@@ -13,6 +13,14 @@
 
 import { splitGedcomName, type ParsedGedcom } from "./parse.ts";
 
+export interface PlanEvent {
+  kind: "birth" | "death" | "marriage" | "divorce" | "relocation" | "custom";
+  dateText: string | null;
+  placeText: string | null;
+  note: string | null;
+  source: string | null;
+}
+
 export interface PlanPerson {
   /** GEDCOM xref — unique within this plan, mapped to a UUID on insert. */
   localId: string;
@@ -27,6 +35,8 @@ export interface PlanPerson {
   notes: string | null;
   /** fam.link round-trip: NOTEs the exporter wrote as "MEMORY: …". */
   memories: { body: string }[];
+  /** Life events (person_events) — round-tripped via EVEN. */
+  events: PlanEvent[];
 }
 
 export interface PlanUnion {
@@ -41,6 +51,7 @@ export interface PlanUnion {
 export interface PlanLink {
   unionLocalId: string;
   childLocalId: string;
+  relation: "biological" | "adoptive" | "step" | "foster";
 }
 
 export interface ImportStats {
@@ -52,6 +63,7 @@ export interface ImportStats {
   deceased: number;
   unnamed: number;
   memories: number;
+  events: number;
   earliestYear: number | null;
   latestYear: number | null;
 }
@@ -79,6 +91,22 @@ export function planImport(parsed: ParsedGedcom): ImportPlan {
   const warnings = [...parsed.warnings];
 
   // --- persons ---------------------------------------------------------------
+  const normalizeEventKind = (raw: string | null): PlanEvent["kind"] => {
+    if (!raw) return "custom";
+    const k = raw.trim().toLowerCase();
+    if (k === "birth" || k === "birt") return "birth";
+    if (k === "death" || k === "deat" || k === "died") return "death";
+    if (k === "marriage" || k === "married" || k === "marr") return "marriage";
+    if (k === "divorce" || k === "divorced" || k === "div") return "divorce";
+    if (k === "relocation" || k === "move" || k === "moved" || k === "residence" || k === "resi") return "relocation";
+    return "custom";
+  };
+  const clamp = (v: string | null, max: number): string | null => {
+    if (!v) return null;
+    const t = v.trim();
+    if (!t) return null;
+    return t.length > max ? t.slice(0, max).trim() : t;
+  };
   const persons: PlanPerson[] = parsed.individuals.map((indi) => {
     const { first, last } = splitGedcomName(indi.nameRaw);
     const memoryNotes: string[] = [];
@@ -90,14 +118,18 @@ export function planImport(parsed: ParsedGedcom): ImportPlan {
         plainNotes.push(note);
       }
     }
+    const events: PlanEvent[] = (indi.events ?? []).map((ev) => ({
+      kind: normalizeEventKind(ev.kind),
+      dateText: clamp(ev.dateText, 200),
+      placeText: clamp(ev.placeText, 200),
+      note: clamp(ev.note, 2000),
+      source: clamp(ev.source, 500),
+    }));
     return {
       localId: indi.xref,
       firstName: first,
       lastName: last,
       gender: indi.gender,
-      // A death event in GEDCOM means deceased; everyone else is living.
-      // (Over-marking living is the privacy-safe direction: share-view
-      // redaction protects them.)
       living: !indi.hasDeathEvent,
       birthDateText: indi.birthDateText,
       birthPlace: indi.birthPlace,
@@ -107,6 +139,7 @@ export function planImport(parsed: ParsedGedcom): ImportPlan {
       memories: memoryNotes
         .filter((m) => m !== "")
         .map((body) => ({ body })),
+      events,
     };
   });
 
@@ -155,7 +188,8 @@ export function planImport(parsed: ParsedGedcom): ImportPlan {
     if (!union) continue;
     for (const childXref of fam.childXrefs) {
       if (!personByLocalId.has(childXref)) continue; // parser warned already
-      links.push({ unionLocalId: fam.xref, childLocalId: childXref });
+      const rel = (fam.childRelations?.get(childXref) as PlanLink["relation"]) ?? "biological";
+      links.push({ unionLocalId: fam.xref, childLocalId: childXref, relation: rel });
     }
   }
   // A malformed file can declare someone their own ancestor. fam.link's graph
@@ -183,6 +217,7 @@ export function planImport(parsed: ParsedGedcom): ImportPlan {
     deceased: persons.filter((p) => !p.living).length,
     unnamed: persons.filter((p) => !p.firstName && !p.lastName).length,
     memories: persons.reduce((n, p) => n + p.memories.length, 0),
+    events: persons.reduce((n, p) => n + p.events.length, 0),
     earliestYear: years.length > 0 ? years[0] : null,
     latestYear: years.length > 0 ? years[years.length - 1] : null,
   };

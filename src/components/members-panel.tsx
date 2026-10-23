@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   createInviteAction,
   removeMemberAction,
@@ -8,6 +8,8 @@ import {
   updateMemberRoleAction,
 } from "@/actions/members";
 import { useToast } from "@/components/toaster";
+import { getBranchPersonIds } from "@/lib/branch-scope";
+import { displayName as displayNameHelper } from "@/lib/canvas-types";
 import {
   MEMBER_ROLES,
   ROLE_DESCRIPTION,
@@ -22,6 +24,7 @@ export interface MemberRow {
   email: string;
   role: MemberRole;
   joinedAt: string; // ISO
+  scopePersonId?: string | null;
 }
 
 export interface InviteRow {
@@ -31,6 +34,7 @@ export interface InviteRow {
   label: string | null;
   createdAt: string; // ISO
   revoked: boolean;
+  scopePersonId?: string | null;
 }
 
 function formatDate(iso: string): string {
@@ -50,11 +54,19 @@ export function MembersPanel({
   treeId,
   members,
   invites,
+  persons = [],
 }: {
   treeId: string;
   members: MemberRow[];
   invites: InviteRow[];
+  persons?: { id: string; firstName: string | null; lastName: string | null }[];
 }) {
+  const [scopePersonId, setScopePersonId] = useState("");
+  const previewCount = useMemo(() => {
+    if (!scopePersonId) return null;
+    // members panel doesn't have unions/links for preview — show Branch label only via person name; actual count computed on create but show generic
+    return null;
+  }, [scopePersonId]);
   const toast = useToast();
   const [pending, startTransition] = useTransition();
 
@@ -145,6 +157,15 @@ export function MembersPanel({
             placeholder="Label (e.g. cousins group)"
             className="input w-52 py-1.5 text-sm"
           />
+          {persons.length > 0 && (
+            <select value={scopePersonId} onChange={(e) => setScopePersonId(e.target.value)} className="input w-48 py-1.5 text-xs">
+              <option value="">Entire tree</option>
+              {persons.map((pp) => (
+                <option key={pp.id} value={pp.id}>{displayNameHelper(pp as never)}</option>
+              ))}
+            </select>
+          )}
+          <input type="hidden" name="scopePersonId" value={scopePersonId} />
           <button
             type="submit"
             disabled={pending}
@@ -153,6 +174,7 @@ export function MembersPanel({
             Create invite link
           </button>
         </form>
+        {scopePersonId && <p className="mt-2 text-xs text-ink-soft">Branch rooted at <span className="font-medium text-ink">{persons.find((pp) => pp.id === scopePersonId) ? displayNameHelper(persons.find((pp) => pp.id === scopePersonId) as never) : scopePersonId.slice(0,6)}</span> — invited members will see only that side. Living relatives stay private.</p>}
 
         {activeInvites.length > 0 && (
           <ul className="mt-4 space-y-2.5">
@@ -164,6 +186,7 @@ export function MembersPanel({
                 <span className="chip bg-evergreen-mist text-evergreen-deep">
                   {ROLE_LABEL[i.role]}
                 </span>
+                {i.scopePersonId && <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[10px] text-gold">branch</span>}
                 <span className="min-w-0 flex-1 truncate font-mono text-xs text-ink-soft">
                   /invite/{i.token}
                 </span>

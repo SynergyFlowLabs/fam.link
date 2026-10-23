@@ -16,6 +16,7 @@ import { maxRole, type MemberRole, type Role } from "@/lib/roles";
 export interface TreeAccess {
   tree: Tree;
   role: Role;
+  scopePersonId?: string | null;
 }
 
 /**
@@ -37,14 +38,14 @@ export async function getTreeAccess(
   if (!tree) return null;
   if (tree.ownerId === userId) return { tree, role: "owner" };
   const memberRows = await db
-    .select({ role: treeMembers.role })
+    .select({ role: treeMembers.role, scopePersonId: treeMembers.scopePersonId })
     .from(treeMembers)
     .where(
       and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)),
     )
     .limit(1);
   if (!memberRows[0]) return null;
-  return { tree, role: memberRows[0].role };
+  return { tree, role: memberRows[0].role, scopePersonId: memberRows[0].scopePersonId ?? null };
 }
 
 export interface MemberView {
@@ -104,6 +105,7 @@ export async function upsertMembership(
   userId: string,
   role: MemberRole,
   invitedBy: string | null,
+  scopePersonId: string | null = null,
 ): Promise<MemberRole> {
   const existing = await db
     .select()
@@ -126,6 +128,7 @@ export async function upsertMembership(
     userId,
     role,
     invitedBy,
+    scopePersonId,
   });
   return role;
 }

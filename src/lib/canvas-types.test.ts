@@ -21,6 +21,7 @@ function person(overrides: Partial<CanvasPerson> = {}): CanvasPerson {
     deathDateText: null,
     deathPlace: null,
     memoryCount: 3,
+    eventCount: 2,
     ...overrides,
   };
 }
@@ -37,6 +38,7 @@ test("redactPerson strips every detail from a living person", () => {
   assert.equal(r.deathDateText, null);
   assert.equal(r.deathPlace, null);
   assert.equal(r.memoryCount, 0);
+  assert.equal(r.eventCount, 0);
   // structure survives — id and living flag stay
   assert.equal(r.id, "p1");
   assert.equal(r.living, true);

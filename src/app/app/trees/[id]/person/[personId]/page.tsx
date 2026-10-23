@@ -2,14 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { memories, parentChild, persons, unions } from "@/db/schema";
+import { memories, parentChild, personEvents, persons, unions } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canComment, canEdit } from "@/lib/roles";
 import { displayName, lifeLine } from "@/lib/canvas-types";
+import { relationLabel } from "@/lib/layout/edges";
 import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
 import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/labels-fields";
+import { PersonTimelineSection } from "@/components/person-events";
 import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
+import { sortEvents } from "@/lib/person-events";
 
 export default async function PersonPage({
   params,
@@ -23,27 +26,33 @@ export default async function PersonPage({
   if (!access) notFound();
   const role = access.role;
 
-  const personRows = await db
+  let personRows = await db
     .select()
     .from(persons)
     .where(eq(persons.treeId, treeId));
+  let unionRows = await db.select().from(unions).where(eq(unions.treeId, treeId));
+  let linkRows = unionRows.length > 0 ? await db.select().from(parentChild).where(inArray(parentChild.unionId, unionRows.map((u) => u.id))) : [];
+  const scopeId = (access as unknown as { scopePersonId?: string | null }).scopePersonId ?? null;
+  if (scopeId) {
+    const { getBranchPersonIds } = await import("@/lib/branch-scope");
+    const branchIds = getBranchPersonIds(scopeId, personRows as never, unionRows as never, linkRows as never);
+    if (!branchIds || !branchIds.has(personId)) notFound();
+    personRows = personRows.filter((pr) => branchIds.has(pr.id));
+  }
   const person = personRows.find((p) => p.id === personId);
   if (!person) notFound();
   const personMap = new Map(personRows.map((p) => [p.id, p]));
 
-  const unionRows = await db.select().from(unions).where(eq(unions.treeId, treeId));
-  const linkRows =
-    unionRows.length > 0
-      ? await db
-          .select()
-          .from(parentChild)
-          .where(
-            inArray(
-              parentChild.unionId,
-              unionRows.map((u) => u.id),
-            ),
-          )
-      : [];
+  if (scopeId) {
+    const { filterUnionsByBranch, filterLinksByBranch } = await import("@/lib/branch-scope");
+    unionRows = filterUnionsByBranch(unionRows as never, (await import("@/lib/branch-scope")).getBranchPersonIds(scopeId, personRows as never, unionRows as never, linkRows as never)!) as never;
+    // Re-filter linkRows to keep only unions in branch and children in branch
+    const branchIds = (await import("@/lib/branch-scope")).getBranchPersonIds(scopeId, personRows as never, unionRows as never, linkRows as never);
+    if (branchIds) linkRows = filterLinksByBranch(linkRows as never, branchIds, unionRows as never) as never;
+  } else {
+    unionRows = await db.select().from(unions).where(eq(unions.treeId, treeId));
+    linkRows = unionRows.length > 0 ? await db.select().from(parentChild).where(inArray(parentChild.unionId, unionRows.map((u) => u.id))) : [];
+  }
 
   const parents: { id: string; label: string }[] = [];
   const siblings = new Set<string>();
@@ -52,7 +61,8 @@ export default async function PersonPage({
     if (!u) continue;
     for (const pid of [u.partnerAId, u.partnerBId]) {
       if (pid && pid !== personId && personMap.has(pid)) {
-        parents.push({ id: pid, label: l.relation ?? "parent" });
+        const rel = (l as unknown as { relation?: string | null }).relation;
+        parents.push({ id: pid, label: rel && rel !== "biological" ? relationLabel(rel) : "parent" });
       }
     }
     for (const other of linkRows.filter(
@@ -63,13 +73,17 @@ export default async function PersonPage({
   }
 
   const spouses: { id: string; status: string | null }[] = [];
-  const children = new Set<string>();
+  const children: { id: string; relation: string | null }[] = [];
+  const childSeen = new Set<string>();
   for (const u of unionRows) {
     if (u.partnerAId !== personId && u.partnerBId !== personId) continue;
     const other = u.partnerAId === personId ? u.partnerBId : u.partnerAId;
     if (other && personMap.has(other)) spouses.push({ id: other, status: u.status });
     for (const l of linkRows.filter((l) => l.unionId === u.id)) {
-      if (personMap.has(l.childId)) children.add(l.childId);
+      if (personMap.has(l.childId) && !childSeen.has(l.childId)) {
+        childSeen.add(l.childId);
+        children.push({ id: l.childId, relation: (l as unknown as { relation?: string }).relation ?? null });
+      }
     }
   }
 
@@ -77,6 +91,24 @@ export default async function PersonPage({
     .select()
     .from(memories)
     .where(eq(memories.personId, personId));
+
+  const eventRows = await db
+    .select()
+    .from(personEvents)
+    .where(eq(personEvents.personId, personId));
+  const sortedEvents = sortEvents(
+    eventRows.map((ev) => ({
+      id: ev.id,
+      personId: ev.personId,
+      kind: ev.kind as import("@/lib/person-events").EventKind,
+      dateText: ev.dateText,
+      placeText: ev.placeText,
+      note: ev.note,
+      source: ev.source,
+      createdAt: ev.createdAt,
+      updatedAt: ev.updatedAt,
+    })),
+  );
 
   const personLabels = await getPersonLabels(personId);
   const allLabelDefs = await listLabelDefs(treeId);
@@ -162,13 +194,14 @@ export default async function PersonPage({
           <h3 className="mt-7 mb-3 border-t border-line pt-4 text-sm font-semibold text-ink">
             Relationships
           </h3>
-          <RelList title="Parents" items={parents.map((p) => p.id)} personMap={personMap} treeId={treeId} />
+          <RelList title="Parents" items={parents.map((p) => p.id)} personMap={personMap} treeId={treeId} badges={Object.fromEntries(parents.map((p) => [p.id, p.label !== "parent" ? p.label : null]))} />
           <RelList title="Spouses" items={spouses.map((s) => s.id)} personMap={personMap} treeId={treeId} />
           <RelList
             title="Children"
-            items={[...children]}
+            items={children.map((c) => c.id)}
             personMap={personMap}
             treeId={treeId}
+            badges={Object.fromEntries(children.map((c) => [c.id, c.relation && c.relation !== "biological" ? c.relation : null]))}
           />
           <RelList
             title="Siblings"
@@ -207,6 +240,16 @@ export default async function PersonPage({
               year: "numeric",
             }),
           }))}
+        />
+      </div>
+
+      <div className="mt-6">
+        <PersonTimelineSection
+          treeId={treeId}
+          personId={personId}
+          personName={name}
+          events={sortedEvents}
+          canEdit={canEdit(role)}
         />
       </div>
 
@@ -260,12 +303,14 @@ function RelList({
   personMap,
   treeId,
   last = false,
+  badges,
 }: {
   title: string;
   items: string[];
   personMap: Map<string, typeof persons.$inferSelect>;
   treeId: string;
   last?: boolean;
+  badges?: Record<string, string | null>;
 }) {
   return (
     <div className={last ? "" : "mb-2.5"}>
@@ -282,14 +327,16 @@ function RelList({
           {items.map((id) => {
             const p = personMap.get(id);
             if (!p) return null;
+            const badge = badges?.[id];
             return (
-              <li key={id}>
+              <li key={id} className="inline-flex items-center gap-1">
                 <Link
                   href={`/app/trees/${treeId}/person/${id}`}
                   className="text-evergreen underline-offset-2 hover:underline"
                 >
                   {displayName(p)}
                 </Link>
+                {badge && <span className="rounded-full bg-evergreen-mist px-1.5 py-0.5 text-[10px] font-medium text-evergreen-deep">{badge}</span>}
               </li>
             );
           })}

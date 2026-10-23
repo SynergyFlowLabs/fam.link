@@ -196,6 +196,7 @@ export const shareLinks = pgTable(
     }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     revokedAt: timestamp("revoked_at"),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [index("share_links_tree_idx").on(t.treeId)],
 );
@@ -234,6 +235,7 @@ export const treeMembers = pgTable(
       onDelete: "set null",
     }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [
     uniqueIndex("tree_members_tree_user_idx").on(t.treeId, t.userId),
@@ -258,6 +260,7 @@ export const treeInvites = pgTable(
     }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     revokedAt: timestamp("revoked_at"),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [index("tree_invites_tree_idx").on(t.treeId)],
 );
@@ -416,12 +419,36 @@ export const memoryCustomValues = pgTable(
   ],
 );
 
+export const personEvents = pgTable(
+  "person_events",
+  {
+    id: text("id").primaryKey(),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    kind: text("kind", {
+      enum: ["birth", "death", "marriage", "divorce", "relocation", "custom"],
+    }).notNull(),
+    dateText: text("date_text"),
+    placeText: text("place_text"),
+    note: text("note"),
+    source: text("source"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("person_events_person_idx").on(t.personId),
+    index("person_events_person_kind_idx").on(t.personId, t.kind),
+  ],
+);
+
 export type PgLabelDef = typeof labelDefs.$inferSelect;
 export type PgPersonLabel = typeof personLabels.$inferSelect;
 export type PgMemoryLabel = typeof memoryLabels.$inferSelect;
 export type PgCustomFieldDef = typeof customFieldDefs.$inferSelect;
 export type PgPersonCustomValue = typeof personCustomValues.$inferSelect;
 export type PgMemoryCustomValue = typeof memoryCustomValues.$inferSelect;
+export type PgPersonEvent = typeof personEvents.$inferSelect;
 
 
 export type PgUser = typeof users.$inferSelect;

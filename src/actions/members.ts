@@ -37,6 +37,14 @@ export async function createInviteAction(
   if (!tree) return fail("That tree no longer exists.");
   if (!isMemberRole(role)) return fail("Pick a role: viewer, commenter or editor.");
 
+  const scopePersonIdRaw = String(formData.get("scopePersonId") ?? "").trim();
+  let scopePersonId: string | null = null;
+  if (scopePersonIdRaw) {
+    const { persons } = await import("@/db/schema");
+    const rows = await db.select({ id: persons.id }).from(persons).where(and(eq(persons.id, scopePersonIdRaw), eq(persons.treeId, treeId))).limit(1);
+    if (rows.length === 0) return fail("That person is not in this tree.");
+    scopePersonId = scopePersonIdRaw;
+  }
   const token = randomBytes(24).toString("base64url");
   await db.insert(treeInvites).values({
     id: randomUUID(),
@@ -45,6 +53,7 @@ export async function createInviteAction(
     role,
     label: label || null,
     createdBy: user.id,
+    scopePersonId,
   });
   revalidateMembers(treeId);
   return { ok: true, token };
@@ -144,6 +153,7 @@ export async function acceptInviteAction(formData: FormData): Promise<void> {
     user.id,
     invite.role,
     invite.createdBy,
+    (invite as unknown as { scopePersonId?: string | null }).scopePersonId ?? null,
   );
   revalidateMembers(invite.treeId);
   redirect(`/app/trees/${invite.treeId}`);

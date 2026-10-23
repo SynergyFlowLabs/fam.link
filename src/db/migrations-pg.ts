@@ -374,4 +374,46 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
        EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
     ],
   },
+  {
+    name: "0003_person_events",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "person_events" (
+        "id" text PRIMARY KEY NOT NULL,
+        "person_id" text NOT NULL,
+        "kind" text NOT NULL,
+        "date_text" text,
+        "place_text" text,
+        "note" text,
+        "source" text,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS "person_events_person_idx" ON "person_events" ("person_id")`,
+      `CREATE INDEX IF NOT EXISTS "person_events_person_kind_idx" ON "person_events" ("person_id","kind")`,
+      `DO $$ BEGIN
+         ALTER TABLE "person_events" ADD CONSTRAINT "person_events_person_id_persons_id_fk"
+           FOREIGN KEY ("person_id") REFERENCES "persons"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+    ],
+  },
+  {
+    name: "0004_branch_scope",
+    statements: [
+      `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "scope_person_id" text REFERENCES "persons"("id") ON DELETE set null`,
+      `ALTER TABLE "tree_invites" ADD COLUMN IF NOT EXISTS "scope_person_id" text REFERENCES "persons"("id") ON DELETE set null`,
+      `ALTER TABLE "tree_members" ADD COLUMN IF NOT EXISTS "scope_person_id" text REFERENCES "persons"("id") ON DELETE set null`,
+      `DO $$ BEGIN
+         ALTER TABLE "share_links" ADD CONSTRAINT "share_links_scope_person_id_persons_id_fk"
+           FOREIGN KEY ("scope_person_id") REFERENCES "persons"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "tree_invites" ADD CONSTRAINT "tree_invites_scope_person_id_persons_id_fk"
+           FOREIGN KEY ("scope_person_id") REFERENCES "persons"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "tree_members" ADD CONSTRAINT "tree_members_scope_person_id_persons_id_fk"
+           FOREIGN KEY ("scope_person_id") REFERENCES "persons"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+    ],
+  },
 ];

@@ -97,4 +97,22 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
       "CREATE INDEX IF NOT EXISTS `memory_custom_values_field_idx` ON `memory_custom_values` (`field_id`);",
     ],
   },
+  {
+    // Life events per person — structured timeline entries (issue #22, P1.2)
+    name: "0006_person_events",
+    statements: [
+      "CREATE TABLE IF NOT EXISTS `person_events` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`person_id` text NOT NULL,\n\t`kind` text NOT NULL,\n\t`date_text` text,\n\t`place_text` text,\n\t`note` text,\n\t`source` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\t`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tFOREIGN KEY (`person_id`) REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE cascade\n);",
+      "CREATE INDEX IF NOT EXISTS `person_events_person_idx` ON `person_events` (`person_id`);",
+      "CREATE INDEX IF NOT EXISTS `person_events_person_kind_idx` ON `person_events` (`person_id`,`kind`);",
+    ],
+  },
+  {
+    // Branch-scoped sharing (issue #25, P1.5)
+    name: "0007_branch_scope",
+    statements: [
+      "ALTER TABLE `share_links` ADD COLUMN `scope_person_id` text REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE set null;",
+      "ALTER TABLE `tree_invites` ADD COLUMN `scope_person_id` text REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE set null;",
+      "ALTER TABLE `tree_members` ADD COLUMN `scope_person_id` text REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE set null;",
+    ],
+  },
 ];

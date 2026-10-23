@@ -10,6 +10,7 @@ import {
   memoryLabels,
   parentChild,
   personCustomValues,
+  personEvents,
   personLabels,
   persons,
   unions,
@@ -55,11 +56,29 @@ export async function GET(
             ),
           )
       : [];
+  // Branch scope: if member is scoped, filter everything to branch before privacy redaction
+  const scopeId = (access as unknown as { scopePersonId?: string | null } | null)?.scopePersonId ?? null;
+  let branchIds: Set<string> | null = null;
+  if (scopeId) {
+    const { getBranchPersonIds, filterUnionsByBranch, filterLinksByBranch } = await import("@/lib/branch-scope");
+    branchIds = getBranchPersonIds(scopeId, personRows as never, unionRows as never, linkRows as never);
+    if (!branchIds || branchIds.size === 0) return new Response("Not found", { status: 404 });
+    personRows = personRows.filter((pe) => branchIds!.has(pe.id));
+    // need to reassign unionRows/linkRows filtered
+    const filteredUnions = filterUnionsByBranch(unionRows as never, branchIds) as never[];
+    const filteredLinks = filterLinksByBranch(linkRows as never, branchIds, unionRows as never) as never[];
+    // mutate for later use
+    unionRows.splice(0, unionRows.length, ...filteredUnions as never[]);
+    linkRows.splice(0, linkRows.length, ...filteredLinks as never[]);
+  }
   let memoryRows = await db
     .select()
     .from(memories)
     .innerJoin(persons, eq(memories.personId, persons.id))
     .where(eq(persons.treeId, treeId));
+  if (branchIds) {
+    memoryRows = memoryRows.filter((m: any) => branchIds!.has(m.persons.id));
+  }
   const mediaRows = await db
     .select()
     .from(media)
@@ -81,6 +100,9 @@ export async function GET(
     ? await db.select().from(memoryCustomValues).where(inArray(memoryCustomValues.memoryId, memoryRows.map((m) => m.memories.id)))
     : [];
 
+  const eventRows = personRows.length > 0
+    ? await db.select().from(personEvents).where(inArray(personEvents.personId, personRows.map((p) => p.id)))
+    : [];
   const redact = (p: Person): Person =>
     p.living
       ? {
@@ -111,6 +133,8 @@ export async function GET(
       memoryLabelsRows.splice(0, memoryLabelsRows.length, ...memoryLabelsRows.filter((r) => remainingMemoryIds.has(r.memoryId)));
       memoryCustomValuesRows.splice(0, memoryCustomValuesRows.length, ...memoryCustomValuesRows.filter((r) => remainingMemoryIds.has(r.memoryId)));
     }
+    // Life events of living relatives are private too
+    eventRows.splice(0, eventRows.length, ...eventRows.filter((r) => !livingIds.has(r.personId)));
   }
 
   const safeName =
@@ -130,6 +154,12 @@ export async function GET(
         authorName: m.memories.authorName,
       });
       memoriesByPerson.set(m.persons.id, list);
+    }
+    const eventsByPerson = new Map<string, typeof eventRows>();
+    for (const ev of eventRows) {
+      const list = eventsByPerson.get(ev.personId) ?? [];
+      list.push(ev);
+      eventsByPerson.set(ev.personId, list);
     }
     // Build per-person label/custom strings for GEDCOM NOTES (GEDCOM-compatible)
     const labelDefMap = new Map(labelDefsRows.map((l) => [l.id, l.name]));
@@ -162,6 +192,7 @@ export async function GET(
         }
         const baseNotes = p.notes ? [p.notes] : [];
         const allNotes = [...baseNotes, ...extraNotes].join("\n\n") || null;
+        const evs = eventsByPerson.get(p.id) ?? [];
         return {
           id: p.id,
           firstName: p.firstName,
@@ -174,6 +205,13 @@ export async function GET(
           deathPlace: p.deathPlace,
           notes: allNotes,
           memories: memoriesByPerson.get(p.id) ?? [],
+          events: evs.map((ev) => ({
+            kind: ev.kind as "birth" | "death" | "marriage" | "divorce" | "relocation" | "custom",
+            dateText: ev.dateText,
+            placeText: ev.placeText,
+            note: ev.note,
+            source: ev.source,
+          })),
         };
       }),
       unions: unionRows.map((u) => ({
@@ -184,7 +222,7 @@ export async function GET(
         dateText: u.dateText,
         placeText: u.placeText,
       })),
-      links: linkRows.map((l) => ({ unionId: l.unionId, childId: l.childId })),
+      links: linkRows.map((l) => ({ unionId: l.unionId, childId: l.childId, relation: ((l as unknown as { relation?: string }).relation as "biological" | "adoptive" | "step" | "foster" | undefined) ?? "biological" })),
     });
     return new Response(text, {
       headers: {
@@ -215,6 +253,7 @@ export async function GET(
       memoryLabels: memoryLabelsRows,
       personCustomValues: personCustomValuesRows,
       memoryCustomValues: memoryCustomValuesRows,
+      personEvents: eventRows,
     };
     return new Response(JSON.stringify(payload, null, 2), {
       headers: {

@@ -19,6 +19,9 @@ import {
   type CanvasUnion,
 } from "@/lib/canvas-types";
 import { labelColorFor } from "@/lib/labels";
+import { breadcrumbNames, describeRelationship, findRelationshipPath, searchPersons, type SearchHit } from "@/lib/search";
+import { relationLabel, relationStrokeProps } from "@/lib/layout/edges";
+import type { RelationKind } from "@/lib/canvas-types";
 import { setFocusPersonAction } from "@/actions/persons";
 import { QuickAddModal, type Relation } from "./quick-add-modal";
 
@@ -342,6 +345,39 @@ export function TreeCanvas({
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const [fieldFilter, setFieldFilter] = useState<string | null>(null);
   const [fieldQuery, setFieldQuery] = useState<string>("");
+  const [hiddenRelations, setHiddenRelations] = useState<Set<RelationKind>>(new Set());
+  const toggleRelation = (k: RelationKind) => {
+    setHiddenRelations((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
+
+  // URL query persistence for faceted filters (shareable): ?label=&field=&q=
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const l = params.get("label");
+      const f = params.get("field");
+      const q = params.get("fq");
+      if (l) setLabelFilter(l);
+      if (f) setFieldFilter(f);
+      if (q) setFieldQuery(q);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (labelFilter) params.set("label", labelFilter); else params.delete("label");
+      if (fieldFilter) params.set("field", fieldFilter); else params.delete("field");
+      if (fieldQuery) params.set("fq", fieldQuery); else params.delete("fq");
+      const qs = params.toString();
+      const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+      window.history.replaceState(null, "", url);
+    } catch {}
+  }, [labelFilter, fieldFilter, fieldQuery]);
 
   const filteredCount = useMemo(() => {
     if (!labelFilter && !fieldFilter) return null;
@@ -399,6 +435,21 @@ export function TreeCanvas({
           {persons.length > 5 && (
             <TreeSearch persons={persons} onLocate={locatePerson} />
           )}
+          {persons.length > 2 && (
+            <RelationshipFinder persons={persons} unions={unions} links={links} onHighlight={(ids) => {
+              if (ids.length === 0) return;
+              const id = ids[0];
+              locatePerson(id);
+              // briefly highlight the whole path via flash cycle
+              let i = 0;
+              const timer = setInterval(() => {
+                if (i >= ids.length) { clearInterval(timer); return; }
+                setHighlightId(ids[i]);
+                i++;
+              }, 500);
+              setTimeout(() => clearInterval(timer), ids.length * 600 + 1000);
+            }} />
+          )}
           {headerExtra}
           {editable && importHref && (
             <a
@@ -422,6 +473,7 @@ export function TreeCanvas({
               totalCount={persons.length}
             />
           )}
+          <RelationLegend hidden={hiddenRelations} onToggle={toggleRelation} />
           {exportsOn && (
           <details className="relative">
             <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">
@@ -539,6 +591,7 @@ export function TreeCanvas({
             links={links}
             nodeById={nodeById}
             unionById={unionById}
+            hiddenRelations={hiddenRelations}
           />
           {layout.nodes.map((n) => {
             const p = personById.get(n.id);
@@ -604,23 +657,54 @@ export function TreeCanvas({
   );
 }
 
+function RelationLegend({ hidden, onToggle }: { hidden: Set<RelationKind>; onToggle: (k: RelationKind) => void }) {
+  const items: { kind: RelationKind; label: string; dash: string }[] = [
+    { kind: "biological", label: "Biological", dash: "solid" },
+    { kind: "adoptive", label: "Adopted", dash: "8 5" },
+    { kind: "step", label: "Step", dash: "4 6" },
+    { kind: "foster", label: "Foster", dash: "2 5" },
+  ];
+  return (
+    <details className="relative">
+      <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">Legend</summary>
+      <div className="shadow-float absolute left-1/2 top-9 z-40 w-56 -translate-x-1/2 rounded-xl border border-line bg-card p-3">
+        <p className="text-xs font-medium text-ink">Relationship lines</p>
+        <ul className="mt-2 space-y-1.5">
+          {items.map((it) => {
+            const isHidden = hidden.has(it.kind);
+            return (
+              <li key={it.kind} className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-xs text-ink-soft">
+                  <svg width={24} height={10} className="shrink-0"><line x1={0} y1={5} x2={24} y2={5} stroke="var(--color-ink-soft)" strokeWidth={1.5} strokeDasharray={it.dash === "solid" ? undefined : it.dash} /></svg>
+                  {it.label}
+                </span>
+                <button type="button" onClick={() => onToggle(it.kind)} className={`rounded-full border px-2 py-0.5 text-[11px] ${isHidden ? "border-line bg-paper text-ink-soft" : "border-evergreen bg-evergreen-mist text-evergreen-deep"}`}>{isHidden ? "Hidden" : "Shown"}</button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-2 text-[11px] leading-snug text-ink-soft">Dashed/dotted edges distinguish adoptive, step & foster ties. Toggle to dim them without moving the tree.</p>
+      </div>
+    </details>
+  );
+}
+
 function Edges({
   unions,
   links,
   nodeById,
   unionById,
+  hiddenRelations,
 }: {
   unions: CanvasUnion[];
   links: CanvasLink[];
   nodeById: Map<string, { x: number; y: number }>;
   unionById: Map<string, CanvasUnion>;
+  hiddenRelations?: Set<RelationKind>;
 }) {
   return (
     <g
-      stroke="var(--color-ink-soft)"
-      strokeWidth={1.5}
       fill="none"
-      opacity={0.55}
       strokeLinecap="round"
       strokeLinejoin="round"
     >
@@ -628,19 +712,22 @@ function Edges({
         const a = nodeById.get(u.partnerAId);
         const b = u.partnerBId ? nodeById.get(u.partnerBId) : null;
         if (!a || !b) return null;
-        return <path key={`c-${u.id}`} d={coupleEdgeD(a, b, NODE_W)} />;
+        // Dim multi-spouse couples slightly? Already same style — keep solid for now.
+        return <path key={`c-${u.id}`} d={coupleEdgeD(a, b, NODE_W)} stroke="var(--color-ink-soft)" strokeWidth={1.5} opacity={0.55} />;
       })}
       {links.map((l) => {
         const u = unionById.get(l.unionId);
         const child = nodeById.get(l.childId);
         if (!u || !child) return null;
+        const rel = (l as unknown as { relation?: RelationKind }).relation ?? "biological";
+        const isHidden = hiddenRelations?.has(rel);
+        const { strokeDasharray } = relationStrokeProps(rel);
         const a = nodeById.get(u.partnerAId);
         const b = u.partnerBId ? nodeById.get(u.partnerBId) : null;
         let sx: number;
         let sy: number;
         if (a && b) {
           sx = (a.x + b.x) / 2;
-          // drop straight off the marriage line — a clean T-junction
           sy = a.y + 1;
         } else if (a || b) {
           const single = (a ?? b) as { x: number; y: number };
@@ -650,11 +737,12 @@ function Edges({
           return null;
         }
         const ty = child.y - NODE_H / 2 - 1;
+        const d = parentChildEdgeD(sx, sy, child.x, ty);
+        const label = relationLabel(rel);
         return (
-          <path
-            key={`p-${l.unionId}-${l.childId}`}
-            d={parentChildEdgeD(sx, sy, child.x, ty)}
-          />
+          <g key={`p-${l.unionId}-${l.childId}`} opacity={isHidden ? 0.15 : 0.62}>
+            <path d={d} stroke="var(--color-ink-soft)" strokeWidth={1.5} strokeDasharray={strokeDasharray} aria-label={`${label} child link`} />
+          </g>
         );
       })}
     </g>
@@ -758,16 +846,44 @@ function TreeSearch({
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [debouncedQ, setDebouncedQ] = useState("");
 
-  const results = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (needle === "") return [];
-    return persons
-      .filter((p) => !p.redacted)
-      .filter((p) => displayName(p).toLowerCase().includes(needle))
-      .slice(0, 8);
-  }, [q, persons]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 150);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const hits: SearchHit[] = useMemo(() => {
+    if (!debouncedQ.trim()) return [];
+    // Map CanvasPerson -> SearchablePerson
+    return searchPersons(
+      debouncedQ,
+      persons.map((p) => ({
+        id: p.id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        alsoKnownAs: p.alsoKnownAs,
+        birthPlace: p.birthPlace,
+        deathPlace: p.deathPlace,
+        birthDateText: p.birthDateText,
+        deathDateText: p.deathDateText,
+        labels: p.labels?.map((l) => ({ name: l.name })) ?? [],
+        customFields: p.customFields?.map((c) => ({ fieldName: c.fieldName, value: c.value })) ?? [],
+        // events not on canvas yet - could be added later
+        redacted: p.redacted === true,
+      })),
+      { limit: 8 }
+    );
+  }, [debouncedQ, persons]);
+
+  const hitPersons = useMemo(() => {
+    const byId = new Map(persons.map((p) => [p.id, p]));
+    return hits.map((h) => ({ hit: h, person: byId.get(h.id)! })).filter((x) => x.person);
+  }, [hits, persons]);
+
+  useEffect(() => setActive(0), [hits]);
 
   return (
     <div className="relative">
@@ -775,7 +891,7 @@ function TreeSearch({
         ref={inputRef}
         type="search"
         value={q}
-        placeholder="Find someone…"
+        placeholder="Find by name, place, label, field…"
         aria-label="Find someone in this tree"
         onChange={(e) => {
           setQ(e.target.value);
@@ -783,40 +899,50 @@ function TreeSearch({
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => {
-          // let the result button's click land before the dropdown closes
           window.setTimeout(() => setOpen(false), 150);
         }}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             setQ("");
             inputRef.current?.blur();
-          } else if (e.key === "Enter" && results.length > 0) {
-            onLocate(results[0].id);
+            setOpen(false);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActive((a) => Math.min(a + 1, hitPersons.length - 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActive((a) => Math.max(a - 1, 0));
+          } else if (e.key === "Enter" && hitPersons.length > 0) {
+            const sel = hitPersons[active] ?? hitPersons[0];
+            onLocate(sel.person.id);
             setOpen(false);
             inputRef.current?.blur();
           }
         }}
-        className="h-8 w-32 rounded-lg border border-line bg-paper px-2.5 text-xs text-ink placeholder:text-ink-soft/60 focus:border-evergreen focus:outline-none sm:w-44"
+        className="h-8 w-36 rounded-lg border border-line bg-paper px-2.5 text-xs text-ink placeholder:text-ink-soft/60 focus:border-evergreen focus:outline-none sm:w-52"
       />
-      {open && results.length > 0 && (
-        <div className="shadow-float absolute right-0 top-9 z-40 w-60 rounded-xl border border-line bg-card p-1.5">
-          {results.map((p) => (
+      {/* a11y result count */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {hitPersons.length > 0 ? `${hitPersons.length} results for ${q}` : ""}
+      </span>
+      {open && hitPersons.length > 0 && (
+        <div className="shadow-float absolute right-0 top-9 z-40 w-64 rounded-xl border border-line bg-card p-1.5">
+          {hitPersons.map(({ hit, person }, idx) => (
             <button
-              key={p.id}
+              key={person.id}
               type="button"
-              // keep focus off the button until clicked, so blur timing is ours
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
-                onLocate(p.id);
+                onLocate(person.id);
                 setOpen(false);
               }}
-              className="block w-full rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-evergreen-mist"
+              className={`block w-full rounded-lg px-2.5 py-1.5 text-left transition-colors ${idx === active ? "bg-evergreen-mist" : "hover:bg-evergreen-mist"}`}
             >
               <span className="block truncate text-xs font-medium text-ink">
-                {displayName(p)}
+                {displayName(person)}
               </span>
               <span className="block truncate text-[10px] text-ink-soft">
-                {lifeLine(p)}
+                {lifeLine(person)} {hit.matchedField ? `· matched ${hit.matchedField}` : ""}
               </span>
             </button>
           ))}
@@ -825,6 +951,75 @@ function TreeSearch({
     </div>
   );
 }
+
+function RelationshipFinder({
+  persons,
+  unions,
+  links,
+  onHighlight,
+}: {
+  persons: CanvasPerson[];
+  unions: { id: string; partnerAId: string; partnerBId: string | null }[];
+  links: { unionId: string; childId: string }[];
+  onHighlight: (ids: string[]) => void;
+}) {
+  const [a, setA] = useState<string>("");
+  const [b, setB] = useState<string>("");
+  const personById = useMemo(() => new Map(persons.map((p) => [p.id, p])), [persons]);
+  const path = useMemo(() => {
+    if (!a || !b) return null;
+    return findRelationshipPath(a, b, unions as never, links as never);
+  }, [a, b, unions, links]);
+  const description = useMemo(() => {
+    if (!path || !a || !b) return null;
+    const byId = new Map(persons.map((p) => [p.id, p as never]));
+    return describeRelationship(a, b, path, byId as never);
+  }, [path, a, b, persons]);
+  const breadcrumb = useMemo(() => {
+    if (!path) return null;
+    const byId = new Map(persons.map((p) => [p.id, p as never]));
+    return breadcrumbNames(path, byId as never);
+  }, [path, persons]);
+
+  return (
+    <details className="relative">
+      <summary className="flex h-8 cursor-pointer list-none items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen">
+        Relate
+      </summary>
+      <div className="shadow-float absolute left-1/2 top-9 z-40 w-80 -translate-x-1/2 rounded-xl border border-line bg-card p-3">
+        <p className="text-xs font-medium text-ink">How are they related?</p>
+        <p className="mt-0.5 text-[11px] text-ink-soft">Pick two people — we&apos;ll trace the shortest path.</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <select value={a} onChange={(e) => setA(e.target.value)} className="input h-8 text-xs">
+            <option value="">Person A</option>
+            {persons.filter((p) => !p.redacted).map((p) => (
+              <option key={p.id} value={p.id}>{displayName(p)}</option>
+            ))}
+          </select>
+          <select value={b} onChange={(e) => setB(e.target.value)} className="input h-8 text-xs">
+            <option value="">Person B</option>
+            {persons.filter((p) => !p.redacted).map((p) => (
+              <option key={p.id} value={p.id}>{displayName(p)}</option>
+            ))}
+          </select>
+        </div>
+        {path && (
+          <div className="mt-3 rounded-lg bg-evergreen-mist/50 px-3 py-2">
+            <p className="text-xs font-medium text-evergreen-deep">{description}</p>
+            {breadcrumb && (
+              <p className="mt-1 text-[11px] text-ink-soft">{breadcrumb.join(" › ")}</p>
+            )}
+            {path.ids.length > 0 && (
+              <button type="button" onClick={() => onHighlight(path.ids)} className="mt-2 text-xs text-evergreen hover:underline">Highlight path on canvas</button>
+            )}
+          </div>
+        )}
+        {a && b && !path && <p className="mt-2 text-xs text-rosewood">No relationship found in this tree</p>}
+      </div>
+    </details>
+  );
+}
+
 
 function PersonNode({
   treeId,
