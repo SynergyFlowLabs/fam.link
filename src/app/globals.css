@@ -210,6 +210,16 @@ body {
     filter: drop-shadow(0 2px 5px rgba(28, 36, 32, 0.16));
   }
 
+  /* Alternate layouts animate focus-preserving switches (300ms). */
+  g[data-node] {
+    transition: transform 300ms ease;
+  }
+  @media print {
+    /* List view is inherently printable — hide canvas chrome for paper */
+    header, [data-canvas-chrome] { display: none !important; }
+    svg { page-break-inside: avoid; }
+  }
+
   /* The search-found ring around a person card. */
   .node-flash {
     animation: node-flash 2.2s ease-out forwards;
