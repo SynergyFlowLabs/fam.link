@@ -46,14 +46,31 @@ export async function createInviteAction(
     scopePersonId = scopePersonIdRaw;
   }
   const token = randomBytes(24).toString("base64url");
+  const inviteId = randomUUID();
   await db.insert(treeInvites).values({
-    id: randomUUID(),
+    id: inviteId,
     treeId,
     token,
     role,
     label: label || null,
     createdBy: user.id,
     scopePersonId,
+  });
+  const { logActivity } = await import("@/lib/activity-log");
+  await logActivity({
+    treeId,
+    actorUserId: user.id,
+    actorName: user.name,
+    action: "invite",
+    targetType: "invite",
+    targetId: inviteId,
+    targetLabel: label || null,
+    detail: { relation: role, personName: scopePersonId ? await (async () => {
+      const { persons } = await import("@/db/schema");
+      const rows = await db.select({ firstName: persons.firstName, lastName: persons.lastName }).from(persons).where(eq(persons.id, scopePersonId!)).limit(1);
+      return rows[0] ? [rows[0].firstName, rows[0].lastName].filter(Boolean).join(" ") || "Unknown" : null;
+    })() : null, personIds: scopePersonId ? [scopePersonId] : [] },
+    undoable: false,
   });
   revalidateMembers(treeId);
   return { ok: true, token };

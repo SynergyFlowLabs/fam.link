@@ -23,6 +23,7 @@ import type {
   MemoryCustomValue,
   PersonEvent,
   PlaceGeocode,
+  ActivityFeed,
 } from "./schema.ts";
 import type {
   PgMemory,
@@ -43,6 +44,7 @@ import type {
   PgMemoryCustomValue,
   PgPersonEvent,
   PgPlaceGeocode,
+  PgActivityFeed,
 } from "./schema-pg.ts";
 
 /**
@@ -76,6 +78,7 @@ const SQLITE_TABLES = {
   memoryCustomValues: sqlite.memoryCustomValues,
   personEvents: sqlite.personEvents,
   placeGeocodes: sqlite.placeGeocodes,
+  activityFeed: sqlite.activityFeed,
 } as const;
 
 const PG_TABLES = {
@@ -100,6 +103,7 @@ const PG_TABLES = {
   memoryCustomValues: pg.memoryCustomValues,
   personEvents: pg.personEvents,
   placeGeocodes: pg.placeGeocodes,
+  activityFeed: pg.activityFeed,
 } as const;
 
 describe("schema parity (sqlite ↔ postgres)", () => {
@@ -169,4 +173,6 @@ export type SchemaParityCheck = [
   PersonEvent extends PgPersonEvent ? true : never,
   PgPlaceGeocode extends PlaceGeocode ? true : never,
   PlaceGeocode extends PgPlaceGeocode ? true : never,
+  PgActivityFeed extends ActivityFeed ? true : never,
+  ActivityFeed extends PgActivityFeed ? true : never,
 ];

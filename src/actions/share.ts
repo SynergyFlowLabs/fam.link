@@ -33,13 +33,30 @@ export async function createShareLinkAction(
     scopePersonId = scopePersonIdRaw;
   }
   const token = randomBytes(24).toString("base64url");
+  const linkId = randomUUID();
   await db.insert(shareLinks).values({
-    id: randomUUID(),
+    id: linkId,
     treeId,
     token,
     label: label || null,
     createdBy: user.id,
     scopePersonId,
+  });
+  const { logActivity } = await import("@/lib/activity-log");
+  await logActivity({
+    treeId,
+    actorUserId: user.id,
+    actorName: user.name,
+    action: "share",
+    targetType: "share_link",
+    targetId: linkId,
+    targetLabel: label || null,
+    detail: { personName: scopePersonId ? await (async () => {
+      const { persons } = await import("@/db/schema");
+      const rows = await db.select({ firstName: persons.firstName, lastName: persons.lastName }).from(persons).where(eq(persons.id, scopePersonId!)).limit(1);
+      return rows[0] ? [rows[0].firstName, rows[0].lastName].filter(Boolean).join(" ") || "Unknown" : null;
+    })() : null, personIds: scopePersonId ? [scopePersonId] : [] },
+    undoable: false,
   });
   revalidatePath(`/app/trees/${treeId}`);
   return { ok: true, token };

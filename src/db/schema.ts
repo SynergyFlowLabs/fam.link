@@ -591,6 +591,62 @@ export const placeGeocodes = sqliteTable(
   (t) => [index("place_geocodes_key_idx").on(t.placeKey)],
 );
 
+
+/**
+ * Activity feed — who changed what, when (issue #31, P3.1).
+ *
+ * Every tree mutation writes one row after success (best-effort: a feed
+ * failure must never fail the mutation). `detail_json` carries the human
+ * summary and, for undoable actions, the snapshot needed to reverse them.
+ * Undo writes its own `undo` row and stamps `undone_at` on the original.
+ */
+export const activityFeed = sqliteTable(
+  "activity_feed",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Display-name snapshot — survives account deletion.
+    actorName: text("actor_name").notNull(),
+    action: text("action", {
+      enum: [
+        "add_person",
+        "add_relationship",
+        "update_person",
+        "delete_person",
+        "add_memory",
+        "delete_memory",
+        "add_event",
+        "update_event",
+        "delete_event",
+        "invite",
+        "share",
+        "undo",
+      ],
+    }).notNull(),
+    targetType: text("target_type", {
+      enum: ["person", "memory", "event", "invite", "share_link", "tree"],
+    }).notNull(),
+    targetId: text("target_id"),
+    // Snapshot of the target's display name for links (rows may vanish).
+    targetLabel: text("target_label"),
+    detailJson: text("detail_json").notNull().default("{}"),
+    undoable: integer("undoable", { mode: "boolean" }).notNull().default(false),
+    undoneAt: integer("undone_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index("activity_feed_tree_idx").on(t.treeId),
+    index("activity_feed_tree_created_idx").on(t.treeId, t.createdAt),
+  ],
+);
+
 export type LabelDef = typeof labelDefs.$inferSelect;
 export type PersonLabel = typeof personLabels.$inferSelect;
 export type MemoryLabel = typeof memoryLabels.$inferSelect;
@@ -612,3 +668,4 @@ export type TreeMember = typeof treeMembers.$inferSelect;
 export type TreeInvite = typeof treeInvites.$inferSelect;
 export type TreeSuggestion = typeof treeSuggestions.$inferSelect;
 export type PlaceGeocode = typeof placeGeocodes.$inferSelect;
+export type ActivityFeed = typeof activityFeed.$inferSelect;

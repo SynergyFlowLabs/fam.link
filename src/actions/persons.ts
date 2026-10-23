@@ -10,6 +10,7 @@ import { db, DATA_DIR } from "@/db";
 import {
   media,
   memories,
+  parentChild,
   persons,
   trees,
   unions,
@@ -31,6 +32,26 @@ import {
 } from "@/lib/tree-mutations";
 import { displayNameOf, parsePersonFields } from "@/lib/person-fields";
 import { OK, fail, type ActionResult } from "@/lib/action-result";
+import { logActivity } from "@/lib/activity-log";
+import type { PersonFields } from "@/lib/person-fields";
+
+/** Actor display name for feed rows. */
+async function actorNameOf(userId: string): Promise<string> {
+  const { users } = await import("@/db/schema");
+  const rows = await db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1);
+  return rows[0]?.name ?? "Someone";
+}
+
+function changedGroups(prev: PersonFields, next: PersonFields): string[] {
+  const changed: string[] = [];
+  if ((prev.firstName ?? "") !== (next.firstName ?? "") || (prev.lastName ?? "") !== (next.lastName ?? "")) changed.push("name");
+  if ((prev.alsoKnownAs ?? "") !== (next.alsoKnownAs ?? "")) changed.push("also known as");
+  if (prev.living !== next.living || (prev.birthDateText ?? "") !== (next.birthDateText ?? "") || (prev.deathDateText ?? "") !== (next.deathDateText ?? "")) changed.push("dates");
+  if ((prev.birthPlace ?? "") !== (next.birthPlace ?? "") || (prev.deathPlace ?? "") !== (next.deathPlace ?? "")) changed.push("places");
+  if ((prev.notes ?? "") !== (next.notes ?? "")) changed.push("notes");
+  if (prev.gender !== next.gender) changed.push("details");
+  return changed;
+}
 
 /**
  * Role guards. Owner+editor may restructure the tree; commenter and up may
@@ -91,8 +112,19 @@ export async function addFirstPersonAction(
       .where(eq(trees.id, treeId));
   }
   await touchTree(treeId);
+  await logActivity({
+    treeId,
+    actorUserId: user.id,
+    actorName: await actorNameOf(user.id),
+    action: "add_person",
+    targetType: "person",
+    targetId: id,
+    targetLabel: name,
+    detail: { personName: name, personIds: [id] },
+    undoable: true,
+  });
   revalidateTree(treeId);
-  return { ok: true, message: name };
+  return { ok: true, message: name, personId: id };
 }
 
 export async function addRelativeAction(
@@ -106,8 +138,37 @@ export async function addRelativeAction(
   const fields = parsePersonFields(formData);
   const result = await addRelativeToTree(treeId, anchorId, relation, fields);
   if (!result.ok) return result;
+  const anchorName = await personNameById(treeId, anchorId);
+  const actorAccess = await accessFor(treeId);
+  await logActivity({
+    treeId,
+    actorUserId: actorAccess?.userId ?? null,
+    actorName: await actorNameOf(actorAccess?.userId ?? ""),
+    action: "add_relationship",
+    targetType: "person",
+    targetId: result.personId ?? null,
+    targetLabel: result.message,
+    detail: {
+      personName: result.message,
+      personName2: anchorName,
+      relation,
+      personIds: [result.personId ?? anchorId, anchorId].filter(Boolean),
+    },
+    undoable: true,
+  });
   revalidateTree(treeId, anchorId);
   return result;
+}
+
+async function personNameById(treeId: string, personId: string): Promise<string | null> {
+  const rows = await db
+    .select({ firstName: persons.firstName, lastName: persons.lastName })
+    .from(persons)
+    .where(and(eq(persons.id, personId), eq(persons.treeId, treeId)))
+    .limit(1);
+  const p = rows[0];
+  if (!p) return null;
+  return [p.firstName, p.lastName].filter(Boolean).join(" ") || "Unknown";
 }
 
 export async function updatePersonAction(
@@ -120,10 +181,55 @@ export async function updatePersonAction(
   if (!personId) return fail("That person is no longer in this tree.");
 
   const fields = parsePersonFields(formData);
+  const prevRows = await db
+    .select()
+    .from(persons)
+    .where(and(eq(persons.id, personId), eq(persons.treeId, treeId)))
+    .limit(1);
+  const prev = prevRows[0];
   const result = await updatePersonInTree(treeId, personId, fields);
   if (!result.ok) return result;
+  const access = await accessFor(treeId);
+  const name = result.message ?? ([prev?.firstName, prev?.lastName].filter(Boolean).join(" ") || "Unknown");
+  await logActivity({
+    treeId,
+    actorUserId: access?.userId ?? null,
+    actorName: await actorNameOf(access?.userId ?? ""),
+    action: "update_person",
+    targetType: "person",
+    targetId: personId,
+    targetLabel: name,
+    detail: {
+      personName: name,
+      personIds: [personId],
+      changed: prev ? changedGroups(parsePersonFieldsFromRow(prev), fields) : [],
+      prev: prev
+        ? {
+            id: prev.id,
+            treeId,
+            fields: parsePersonFieldsFromRow(prev),
+          }
+        : null,
+    },
+    undoable: true,
+  });
   revalidateTree(treeId, personId);
   return result;
+}
+
+function parsePersonFieldsFromRow(p: typeof persons.$inferSelect): PersonFields {
+  return {
+    firstName: p.firstName,
+    lastName: p.lastName,
+    alsoKnownAs: p.alsoKnownAs,
+    gender: p.gender,
+    living: p.living,
+    birthDateText: p.birthDateText,
+    birthPlace: p.birthPlace,
+    deathDateText: p.deathDateText,
+    deathPlace: p.deathPlace,
+    notes: p.notes,
+  };
 }
 
 export async function deletePersonAction(formData: FormData): Promise<void> {
@@ -133,7 +239,29 @@ export async function deletePersonAction(formData: FormData): Promise<void> {
   const personId = String(formData.get("personId") ?? "");
   if (!personId) return;
 
+  // Snapshot for the activity feed's undo (issue #31): person row + the
+  // unions about to be rewritten + child links, captured BEFORE changes.
+  const snapRows = await db
+    .select()
+    .from(persons)
+    .where(and(eq(persons.id, personId), eq(persons.treeId, treeId)))
+    .limit(1);
+  const snapPerson = snapRows[0] ?? null;
   const myUnions = await unionsOfPartner(treeId, personId);
+  const unionsBefore = myUnions.map((u) => ({ id: u.id, partnerAId: u.partnerAId, partnerBId: u.partnerBId, status: u.status }));
+  const unionIds = myUnions.map((u) => u.id);
+  const linksOut = unionIds.length
+    ? await db.select({ unionId: parentChild.unionId, childId: parentChild.childId }).from(parentChild).where(eq(parentChild.childId, personId))
+    : [];
+  const linksOfUnions = unionIds.length
+    ? await db.select({ unionId: parentChild.unionId, childId: parentChild.childId }).from(parentChild).where(eq(parentChild.unionId, unionIds[0]))
+    : [];
+  // children of ALL my unions (for full restore)
+  const allLinksOfUnions: { unionId: string; childId: string }[] = [];
+  for (const uid of unionIds) {
+    const rows = await db.select({ unionId: parentChild.unionId, childId: parentChild.childId }).from(parentChild).where(eq(parentChild.unionId, uid));
+    allLinksOfUnions.push(...rows);
+  }
   for (const u of myUnions) {
     const survivor =
       u.partnerAId === personId ? u.partnerBId : u.partnerAId ?? null;
@@ -168,6 +296,28 @@ export async function deletePersonAction(formData: FormData): Promise<void> {
   // memories owned are now orphans. Sweep them (rows + files).
   await sweepTreeMedia(treeId);
   await touchTree(treeId);
+  if (snapPerson) {
+    const user = await getCurrentUser();
+    await logActivity({
+      treeId,
+      actorUserId: user?.id ?? null,
+      actorName: user?.name ?? "Someone",
+      action: "delete_person",
+      targetType: "person",
+      targetId: personId,
+      targetLabel: [snapPerson.firstName, snapPerson.lastName].filter(Boolean).join(" ") || "Unknown",
+      detail: {
+        personName: [snapPerson.firstName, snapPerson.lastName].filter(Boolean).join(" ") || "Unknown",
+        personIds: [personId],
+        person: { id: snapPerson.id, treeId, fields: parsePersonFieldsFromRow(snapPerson) },
+        unions: unionsBefore,
+        links: [...linksOut, ...allLinksOfUnions, ...linksOfUnions].filter(
+          (l, i, arr) => arr.findIndex((x) => x.unionId === l.unionId && x.childId === l.childId) === i,
+        ),
+      },
+      undoable: true,
+    });
+  }
   revalidateTree(treeId);
   redirect(`/app/trees/${treeId}`);
 }
@@ -239,8 +389,10 @@ export async function addMemoryAction(
 
   const occurred = String(formData.get("occurredText") ?? "").trim();
   const author = String(formData.get("authorName") ?? "").trim();
+  const memoryId = randomUUID();
+  const memoryPersonName = await personNameById(treeId, personId);
   await db.insert(memories).values({
-    id: randomUUID(),
+    id: memoryId,
     personId,
     kind,
     body,
@@ -250,6 +402,17 @@ export async function addMemoryAction(
     mediaId,
   });
   await touchTree(treeId);
+  await logActivity({
+    treeId,
+    actorUserId: access.userId,
+    actorName: await actorNameOf(access.userId),
+    action: "add_memory",
+    targetType: "memory",
+    targetId: memoryId,
+    targetLabel: memoryPersonName ?? "a relative",
+    detail: { personIds: [personId], personName: memoryPersonName },
+    undoable: true,
+  });
   revalidateTree(treeId, personId);
   return OK;
 }
@@ -266,7 +429,7 @@ export async function deleteMemoryAction(
   // Ensure the memory belongs to a person in this tree
   const rows = await db
     .select({
-      personId: memories.personId,
+      memory: memories,
       treeId: persons.treeId,
       authorUserId: memories.authorUserId,
     })
@@ -280,12 +443,31 @@ export async function deleteMemoryAction(
   if (!canEdit(access.role) && !(canComment(access.role) && mine)) {
     return fail("Only the owner, an editor, or the author can remove a memory.");
   }
+  const memorySnap = rows[0].memory;
+  const targetPersonId = memorySnap.personId;
+  const memoryPersonName = await personNameById(treeId, targetPersonId);
 
   await db.delete(memories).where(eq(memories.id, memoryId));
   // The memory's photo (if any) is now unreferenced — remove row + file.
   await sweepTreeMedia(treeId);
   await touchTree(treeId);
-  revalidateTree(treeId, personId || undefined);
+  await logActivity({
+    treeId,
+    actorUserId: access.userId,
+    actorName: await actorNameOf(access.userId),
+    action: "delete_memory",
+    targetType: "memory",
+    targetId: memoryId,
+    targetLabel: memoryPersonName ?? "a relative",
+    detail: {
+      personIds: [targetPersonId],
+      personName: memoryPersonName,
+      // Photos are swept with the file, so only text memories are undoable.
+      memory: memorySnap.mediaId ? null : memorySnap,
+    },
+    undoable: !memorySnap.mediaId,
+  });
+  revalidateTree(treeId, personId || targetPersonId);
   return OK;
 }
 

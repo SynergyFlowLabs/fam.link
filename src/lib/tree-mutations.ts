@@ -95,12 +95,14 @@ export async function addRelativeToTree(
     .where(and(eq(persons.id, anchorId), eq(persons.treeId, treeId)))
     .limit(1);
   if (!anchorRows[0]) return fail("That person is no longer in this tree.");
+  let createdPersonId: string | undefined;
 
   if (relation === "father" || relation === "mother") {
     const newId = await insertPerson(treeId, {
       ...fields,
       gender: fields.gender ?? (relation === "father" ? "m" : "f"),
     });
+    createdPersonId = newId;
     const parentUnions = await parentUnionsOf(anchorId);
     // Fill an open partner slot if one exists; otherwise start a new family
     // (step/adoptive parent, or the first parent of a previously unknown pair).
@@ -124,6 +126,7 @@ export async function addRelativeToTree(
     }
   } else if (relation === "spouse") {
     const newId = await insertPerson(treeId, fields);
+    createdPersonId = newId;
     await db.insert(unions).values({
       id: randomUUID(),
       treeId,
@@ -147,13 +150,14 @@ export async function addRelativeToTree(
       target = { id: unionId } as typeof target;
     }
     const childId = await insertPerson(treeId, fields);
+    createdPersonId = childId;
     await db
       .insert(parentChild)
       .values({ id: randomUUID(), unionId: target.id, childId });
   }
 
   await touchTree(treeId);
-  return { ok: true, message: displayNameOf(fields) };
+  return { ok: true, message: displayNameOf(fields), personId: createdPersonId };
 }
 
 /** Applies an edit of a person's facts. */

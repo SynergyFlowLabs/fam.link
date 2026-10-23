@@ -463,6 +463,53 @@ export const placeGeocodes = pgTable(
   (t) => [index("place_geocodes_key_idx").on(t.placeKey)],
 );
 
+/**
+ * Activity feed — who changed what, when. Mirrors schema.ts activityFeed
+ * exactly (schema-parity.test.ts).
+ */
+export const activityFeed = pgTable(
+  "activity_feed",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    actorName: text("actor_name").notNull(),
+    action: text("action", {
+      enum: [
+        "add_person",
+        "add_relationship",
+        "update_person",
+        "delete_person",
+        "add_memory",
+        "delete_memory",
+        "add_event",
+        "update_event",
+        "delete_event",
+        "invite",
+        "share",
+        "undo",
+      ],
+    }).notNull(),
+    targetType: text("target_type", {
+      enum: ["person", "memory", "event", "invite", "share_link", "tree"],
+    }).notNull(),
+    targetId: text("target_id"),
+    targetLabel: text("target_label"),
+    detailJson: text("detail_json").notNull().default("{}"),
+    undoable: boolean("undoable").notNull().default(false),
+    undoneAt: timestamp("undone_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("activity_feed_tree_idx").on(t.treeId),
+    index("activity_feed_tree_created_idx").on(t.treeId, t.createdAt),
+  ],
+);
+
 export type PgLabelDef = typeof labelDefs.$inferSelect;
 export type PgPersonLabel = typeof personLabels.$inferSelect;
 export type PgMemoryLabel = typeof memoryLabels.$inferSelect;
@@ -471,6 +518,7 @@ export type PgPersonCustomValue = typeof personCustomValues.$inferSelect;
 export type PgMemoryCustomValue = typeof memoryCustomValues.$inferSelect;
 export type PgPersonEvent = typeof personEvents.$inferSelect;
 export type PgPlaceGeocode = typeof placeGeocodes.$inferSelect;
+export type PgActivityFeed = typeof activityFeed.$inferSelect;
 
 
 export type PgUser = typeof users.$inferSelect;
