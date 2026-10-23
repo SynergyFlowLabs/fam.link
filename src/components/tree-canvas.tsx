@@ -86,6 +86,8 @@ interface Props {
   walkthroughHref?: string | null;
   /** Link to the family book print view — header pill (issue #39). */
   bookHref?: string | null;
+  /** Link to the insights panel — header pill (issue #40). */
+  insightsHref?: string | null;
   /** Small note under the title for invited members (e.g. their role). */
   memberNote?: string | null;
   /** Extra header controls (owner view: Share + Members). */
@@ -133,6 +135,7 @@ export function TreeCanvas({
   galleryHref = null,
   walkthroughHref = null,
   bookHref = null,
+  insightsHref = null,
   memberNote = null,
   headerExtra = null,
   importHref = null,
@@ -631,6 +634,14 @@ export function TreeCanvas({
               className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
             >
               Walk
+            </a>
+          )}
+          {insightsHref && (
+            <a
+              href={insightsHref}
+              className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
+            >
+              Insights
             </a>
           )}
           {bookHref && (
