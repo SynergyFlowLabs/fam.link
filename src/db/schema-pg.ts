@@ -55,6 +55,11 @@ export const trees = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
+    visibility: text("visibility", {
+      enum: ["private", "public"],
+    })
+      .notNull()
+      .default("private"),
     focusPersonId: text("focus_person_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -257,6 +262,44 @@ export const treeInvites = pgTable(
   (t) => [index("tree_invites_tree_idx").on(t.treeId)],
 );
 
+export const treeSuggestions = pgTable(
+  "tree_suggestions",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    type: text("type", {
+      enum: ["edit_person", "add_relative"],
+    }).notNull(),
+    relation: text("relation", {
+      enum: ["father", "mother", "spouse", "child"],
+    }),
+    payloadJson: text("payload_json").notNull(),
+    note: text("note"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    status: text("status", {
+      enum: ["pending", "accepted", "rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    reviewedBy: text("reviewed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at"),
+  },
+  (t) => [
+    index("tree_suggestions_tree_idx").on(t.treeId),
+    index("tree_suggestions_person_idx").on(t.personId),
+  ],
+);
+
 export type PgUser = typeof users.$inferSelect;
 export type PgTree = typeof trees.$inferSelect;
 export type PgPerson = typeof persons.$inferSelect;
@@ -267,3 +310,4 @@ export type PgMedia = typeof media.$inferSelect;
 export type PgShareLink = typeof shareLinks.$inferSelect;
 export type PgTreeMember = typeof treeMembers.$inferSelect;
 export type PgTreeInvite = typeof treeInvites.$inferSelect;
+export type PgTreeSuggestion = typeof treeSuggestions.$inferSelect;

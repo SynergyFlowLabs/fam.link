@@ -9,6 +9,8 @@ import { ROLE_LABEL, canEdit } from "@/lib/roles";
 import { TreeCanvas } from "@/components/tree-canvas";
 import { FirstPersonForm } from "@/components/quick-add-modal";
 import { ShareMenu, type ShareLinkView } from "@/components/share-menu";
+import { PublicToggle } from "@/components/public-toggle";
+import { countPendingSuggestions } from "@/lib/public-trees";
 import { listShareLinks } from "@/lib/share";
 import type { CanvasLink, CanvasPerson, CanvasUnion } from "@/lib/canvas-types";
 
@@ -94,6 +96,7 @@ export default async function TreeCanvasPage({
   let headerExtra: React.ReactNode = null;
   if (role === "owner") {
     const shareLinkRows = await listShareLinks(treeId);
+    const pendingSuggestions = countPendingSuggestions(treeId);
     shareLinkViews = shareLinkRows.map((l) => ({
       id: l.id,
       token: l.token,
@@ -103,6 +106,11 @@ export default async function TreeCanvasPage({
     }));
     headerExtra = (
       <>
+        <PublicToggle
+          treeId={treeId}
+          isPublic={tree.visibility === "public"}
+          pendingCount={await pendingSuggestions}
+        />
         <Link
           href={`/app/trees/${treeId}/members`}
           className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
@@ -122,6 +130,22 @@ export default async function TreeCanvasPage({
     memberNote = `You're a ${ROLE_LABEL[role]} on this tree${
       ownerName ? ` — shared by ${ownerName}` : ""
     }.`;
+    if (editable && tree.visibility === "public") {
+      const pendingCount = await countPendingSuggestions(treeId);
+      headerExtra = (
+        <a
+          href={`/app/trees/${treeId}/suggestions`}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-evergreen/60 bg-evergreen-mist px-2.5 text-xs font-medium text-evergreen-deep transition-colors hover:bg-evergreen hover:text-paper"
+        >
+          Suggestions
+          {pendingCount > 0 && (
+            <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-evergreen px-1 text-[10px] font-semibold text-paper">
+              {pendingCount}
+            </span>
+          )}
+        </a>
+      );
+    }
   }
 
   return (

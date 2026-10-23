@@ -54,6 +54,17 @@ export const trees = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
+    /**
+     * "private" (default): only the owner, invited members and share-link
+     * holders. "public": listed on /explore and readable by anyone —
+     * the mode for trees of people in history, which the community can
+     * help improve through suggestions the owner curates.
+     */
+    visibility: text("visibility", {
+      enum: ["private", "public"],
+    })
+      .notNull()
+      .default("private"),
     // The person the canvas roots on. No FK constraint (would be circular
     // with persons.tree_id); enforced at the application layer.
     focusPersonId: text("focus_person_id"),
@@ -321,6 +332,55 @@ export const treeInvites = sqliteTable(
 );
 
 
+/**
+ * A proposed improvement to a public tree — "edit/updates requests".
+ *
+ * Anyone signed in (except those who can already edit directly) can
+ * suggest; the owner and invited editors curate the queue. Types:
+ *  - edit_person: corrected facts for `personId` (payload = person fields)
+ *  - add_relative: a missing relative of `personId` (relation + fields)
+ */
+export const treeSuggestions = sqliteTable(
+  "tree_suggestions",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    // the person an edit targets / a new relative hangs off
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    type: text("type", {
+      enum: ["edit_person", "add_relative"],
+    }).notNull(),
+    relation: text("relation", {
+      enum: ["father", "mother", "spouse", "child"],
+    }),
+    payloadJson: text("payload_json").notNull(),
+    note: text("note"), // why the change, per contribution etiquette
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    status: text("status", {
+      enum: ["pending", "accepted", "rejected"],
+    })
+      .notNull()
+      .default("pending"),
+    reviewedBy: text("reviewed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: integer("reviewed_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [
+    index("tree_suggestions_tree_idx").on(t.treeId),
+    index("tree_suggestions_person_idx").on(t.personId),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Tree = typeof trees.$inferSelect;
 export type Person = typeof persons.$inferSelect;
@@ -331,3 +391,4 @@ export type Media = typeof media.$inferSelect;
 export type ShareLink = typeof shareLinks.$inferSelect;
 export type TreeMember = typeof treeMembers.$inferSelect;
 export type TreeInvite = typeof treeInvites.$inferSelect;
+export type TreeSuggestion = typeof treeSuggestions.$inferSelect;

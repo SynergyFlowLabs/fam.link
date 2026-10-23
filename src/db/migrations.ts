@@ -60,4 +60,15 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
         "ALTER TABLE `memories` ADD COLUMN `author_user_id` text REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null;",
     ],
   },
+  {
+    // Public trees + community suggestions (1.15). The ALTER is tolerated by
+    // the runner on databases that already have the column.
+    name: "0004_public_trees",
+    statements: [
+      "ALTER TABLE `trees` ADD COLUMN `visibility` text DEFAULT 'private' NOT NULL;",
+      "CREATE TABLE IF NOT EXISTS `tree_suggestions` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`person_id` text NOT NULL,\n\t`type` text NOT NULL,\n\t`relation` text,\n\t`payload_json` text NOT NULL,\n\t`note` text,\n\t`created_by` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\t`status` text DEFAULT 'pending' NOT NULL,\n\t`reviewed_by` text,\n\t`reviewed_at` integer,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`person_id`) REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null,\n\tFOREIGN KEY (`reviewed_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+      "CREATE INDEX IF NOT EXISTS `tree_suggestions_tree_idx` ON `tree_suggestions` (`tree_id`);",
+      "CREATE INDEX IF NOT EXISTS `tree_suggestions_person_idx` ON `tree_suggestions` (`person_id`);",
+    ],
+  },
 ];

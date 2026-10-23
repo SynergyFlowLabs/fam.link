@@ -11,7 +11,39 @@ import {
   DEMO_TREE,
   DEMO_UNIONS,
   DEMO_USER,
+  QURAISH_LINKS,
+  QURAISH_MEMORIES,
+  QURAISH_PERSONS,
+  QURAISH_TREE,
+  QURAISH_UNIONS,
+  type DemoLink,
+  type DemoMemory,
+  type DemoPerson,
+  type DemoUnion,
 } from "./demo-data";
+
+const TREE_BUNDLES: {
+  tree: { id: string; name: string; description: string; focusPersonId: string; visibility: "private" | "public" };
+  persons: DemoPerson[];
+  unions: DemoUnion[];
+  links: DemoLink[];
+  memories: DemoMemory[];
+}[] = [
+  {
+    tree: { ...DEMO_TREE, visibility: "private" as const },
+    persons: DEMO_PERSONS,
+    unions: DEMO_UNIONS,
+    links: DEMO_LINKS,
+    memories: DEMO_MEMORIES,
+  },
+  {
+    tree: QURAISH_TREE,
+    persons: QURAISH_PERSONS,
+    unions: QURAISH_UNIONS,
+    links: QURAISH_LINKS,
+    memories: QURAISH_MEMORIES,
+  },
+];
 import * as pg from "./schema-pg";
 
 export type PgAppDb = NodePgDatabase<typeof pg>;
@@ -27,59 +59,63 @@ export async function ensureDemoDataPg(db: PgAppDb): Promise<void> {
     passwordHash: hashPasswordSync(DEMO_USER.password),
   });
 
-  await db.insert(pg.trees).values({
-    id: DEMO_TREE.id,
-    ownerId: DEMO_USER.id,
-    name: DEMO_TREE.name,
-    description: DEMO_TREE.description,
-    focusPersonId: DEMO_TREE.focusPersonId,
-  });
+  for (const bundle of TREE_BUNDLES) {
+    await db.insert(pg.trees).values({
+      id: bundle.tree.id,
+      ownerId: DEMO_USER.id,
+      name: bundle.tree.name,
+      description: bundle.tree.description,
+      focusPersonId: bundle.tree.focusPersonId,
+      visibility: bundle.tree.visibility,
+    });
 
-  await db.insert(pg.persons).values(
-    DEMO_PERSONS.map((p) => ({
-      id: p.id,
-      treeId: DEMO_TREE.id,
-      firstName: p.first,
-      lastName: p.last,
-      gender: p.gender,
-      living: p.living,
-      birthDateText: p.birth,
-      birthPlace: p.birthPlace,
-      deathDateText: p.living ? null : p.death,
-      deathPlace: p.living ? null : p.deathPlace,
-      notes: p.notes,
-    })),
-  );
+    await db.insert(pg.persons).values(
+      bundle.persons.map((p) => ({
+        id: p.id,
+        treeId: bundle.tree.id,
+        firstName: p.first,
+        lastName: p.last,
+        alsoKnownAs: p.aka ?? null,
+        gender: p.gender,
+        living: p.living,
+        birthDateText: p.birth,
+        birthPlace: p.birthPlace,
+        deathDateText: p.living ? null : p.death,
+        deathPlace: p.living ? null : p.deathPlace,
+        notes: p.notes,
+      })),
+    );
 
-  await db.insert(pg.unions).values(
-    DEMO_UNIONS.map((u) => ({
-      id: u.id,
-      treeId: DEMO_TREE.id,
-      partnerAId: u.a,
-      partnerBId: u.b,
-      status: u.status,
-      dateText: u.date,
-      placeText: u.place,
-    })),
-  );
+    await db.insert(pg.unions).values(
+      bundle.unions.map((u) => ({
+        id: u.id,
+        treeId: bundle.tree.id,
+        partnerAId: u.a,
+        partnerBId: u.b,
+        status: u.status,
+        dateText: u.date,
+        placeText: u.place,
+      })),
+    );
 
-  await db.insert(pg.parentChild).values(
-    DEMO_LINKS.map((l) => ({
-      id: l.id,
-      unionId: l.u,
-      childId: l.child,
-      relation: "biological" as const,
-    })),
-  );
+    await db.insert(pg.parentChild).values(
+      bundle.links.map((l) => ({
+        id: l.id,
+        unionId: l.u,
+        childId: l.child,
+        relation: "biological" as const,
+      })),
+    );
 
-  await db.insert(pg.memories).values(
-    DEMO_MEMORIES.map((m) => ({
-      id: m.id,
-      personId: m.person,
-      kind: "text" as const,
-      body: m.body,
-      occurredText: m.when,
-      authorName: m.author,
-    })),
-  );
+    await db.insert(pg.memories).values(
+      bundle.memories.map((m) => ({
+        id: m.id,
+        personId: m.person,
+        kind: "text" as const,
+        body: m.body,
+        occurredText: m.when,
+        authorName: m.author,
+      })),
+    );
+  }
 }

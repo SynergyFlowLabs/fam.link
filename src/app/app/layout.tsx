@@ -35,6 +35,12 @@ export default async function AppLayout({
             >
               Your trees
             </Link>
+            <Link
+              href="/explore"
+              className="hidden text-sm text-ink-soft transition-colors hover:text-evergreen sm:inline"
+            >
+              Explore
+            </Link>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span

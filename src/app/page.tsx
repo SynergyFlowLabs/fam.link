@@ -54,6 +54,12 @@ export default async function LandingPage() {
       <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Logo />
         <nav className="flex items-center gap-5 text-sm">
+          <Link
+            href="/explore"
+            className="text-ink-soft transition-colors hover:text-evergreen"
+          >
+            Explore
+          </Link>
           {user ? (
             <Link href="/app" className="btn-primary px-4 py-2 text-sm">
               Open your trees

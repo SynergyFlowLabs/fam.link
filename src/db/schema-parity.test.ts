@@ -51,6 +51,7 @@ const SQLITE_TABLES = {
   pendingImports: sqlite.pendingImports,
   treeMembers: sqlite.treeMembers,
   treeInvites: sqlite.treeInvites,
+  treeSuggestions: sqlite.treeSuggestions,
 } as const;
 
 const PG_TABLES = {
@@ -66,6 +67,7 @@ const PG_TABLES = {
   pendingImports: pg.pendingImports,
   treeMembers: pg.treeMembers,
   treeInvites: pg.treeInvites,
+  treeSuggestions: pg.treeSuggestions,
 } as const;
 
 describe("schema parity (sqlite ↔ postgres)", () => {

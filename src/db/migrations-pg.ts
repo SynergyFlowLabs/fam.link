@@ -234,4 +234,42 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
        EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
     ],
   },
+  {
+    name: "0001_public_trees",
+    statements: [
+      `ALTER TABLE "trees" ADD COLUMN IF NOT EXISTS "visibility" text DEFAULT 'private' NOT NULL`,
+      `CREATE TABLE IF NOT EXISTS "tree_suggestions" (
+        "id" text PRIMARY KEY NOT NULL,
+        "tree_id" text NOT NULL,
+        "person_id" text NOT NULL,
+        "type" text NOT NULL,
+        "relation" text,
+        "payload_json" text NOT NULL,
+        "note" text,
+        "created_by" text,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "status" text DEFAULT 'pending' NOT NULL,
+        "reviewed_by" text,
+        "reviewed_at" timestamp
+      )`,
+      `CREATE INDEX IF NOT EXISTS "tree_suggestions_tree_idx" ON "tree_suggestions" ("tree_id")`,
+      `CREATE INDEX IF NOT EXISTS "tree_suggestions_person_idx" ON "tree_suggestions" ("person_id")`,
+      `DO $$ BEGIN
+         ALTER TABLE "tree_suggestions" ADD CONSTRAINT "tree_suggestions_tree_id_trees_id_fk"
+           FOREIGN KEY ("tree_id") REFERENCES "trees"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "tree_suggestions" ADD CONSTRAINT "tree_suggestions_person_id_persons_id_fk"
+           FOREIGN KEY ("person_id") REFERENCES "persons"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "tree_suggestions" ADD CONSTRAINT "tree_suggestions_created_by_users_id_fk"
+           FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "tree_suggestions" ADD CONSTRAINT "tree_suggestions_reviewed_by_users_id_fk"
+           FOREIGN KEY ("reviewed_by") REFERENCES "users"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+    ],
+  },
 ];

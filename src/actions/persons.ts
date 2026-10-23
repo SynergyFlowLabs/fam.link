@@ -1,8 +1,7 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -11,7 +10,6 @@ import { db, DATA_DIR } from "@/db";
 import {
   media,
   memories,
-  parentChild,
   persons,
   trees,
   unions,
@@ -22,13 +20,17 @@ import { ownedTree } from "@/actions/trees";
 import { getTreeAccess } from "@/lib/access";
 import { sweepTreeMedia } from "@/lib/uploads";
 import { canComment, canEdit, type Role } from "@/lib/roles";
+import {
+  addRelativeToTree,
+  insertPerson,
+  revalidateTree,
+  touchTree,
+  unionsOfPartner,
+  updatePersonInTree,
+  type Relation,
+} from "@/lib/tree-mutations";
+import { displayNameOf, parsePersonFields } from "@/lib/person-fields";
 import { OK, fail, type ActionResult } from "@/lib/action-result";
-
-export type Relation = "father" | "mother" | "spouse" | "child";
-
-function displayName(fields: ReturnType<typeof personFields>): string {
-  return [fields.firstName, fields.lastName].filter(Boolean).join(" ") || "Someone";
-}
 
 /**
  * Role guards. Owner+editor may restructure the tree; commenter and up may
@@ -47,30 +49,6 @@ async function accessFor(
   if (!user) return null;
   const access = await getTreeAccess(treeId, user.id);
   return access ? { userId: user.id, role: access.role } : null;
-}
-
-function personFields(formData: FormData) {
-  const gender = String(formData.get("gender") ?? "");
-  const living = formData.get("living") === "on" || formData.get("living") === "true";
-  const text = (name: string) => {
-    const v = String(formData.get(name) ?? "").trim();
-    return v.length > 0 ? v : null;
-  };
-  return {
-    firstName: text("firstName"),
-    lastName: text("lastName"),
-    alsoKnownAs: text("alsoKnownAs"),
-    gender:
-      gender === "m" || gender === "f" || gender === "x"
-        ? (gender as "m" | "f" | "x")
-        : null,
-    living,
-    birthDateText: text("birthDateText"),
-    birthPlace: text("birthPlace"),
-    deathDateText: living ? null : text("deathDateText"),
-    deathPlace: living ? null : text("deathPlace"),
-    notes: text("notes"),
-  };
 }
 
 /** Editor-and-up guard for redirecting (void) actions. Null → redirect /app. */
@@ -95,59 +73,6 @@ async function assertEditorResult(
   return null;
 }
 
-async function touchTree(treeId: string) {
-  await db
-    .update(trees)
-    .set({ updatedAt: new Date() })
-    .where(eq(trees.id, treeId));
-}
-
-function revalidateTree(treeId: string, personId?: string) {
-  revalidatePath(`/app/trees/${treeId}`);
-  if (personId) {
-    revalidatePath(`/app/trees/${treeId}/person/${personId}`);
-  }
-}
-
-async function insertPerson(treeId: string, fields: ReturnType<typeof personFields>) {
-  const id = randomUUID();
-  await db.insert(persons).values({ id, treeId, ...fields });
-  return id;
-}
-
-/** The anchor person's parent-unions, in link order. */
-async function parentUnionsOf(childId: string) {
-  const links = await db
-    .select({ unionId: parentChild.unionId })
-    .from(parentChild)
-    .where(eq(parentChild.childId, childId));
-  if (links.length === 0) return [];
-  return db
-    .select()
-    .from(unions)
-    .where(
-      inArray(
-        unions.id,
-        links.map((l) => l.unionId),
-      ),
-    );
-}
-
-/**
- * The anchor person's unions (where they are a partner), in creation order.
- * Scoped to the tree — a full scan of every union in the database would slow
- * down as the number of trees grows.
- */
-async function unionsOfPartner(treeId: string, personId: string) {
-  const rows = await db
-    .select()
-    .from(unions)
-    .where(eq(unions.treeId, treeId));
-  return rows.filter(
-    (u) => u.partnerAId === personId || u.partnerBId === personId,
-  );
-}
-
 export async function addFirstPersonAction(
   formData: FormData,
 ): Promise<ActionResult> {
@@ -156,8 +81,8 @@ export async function addFirstPersonAction(
   if (!user) redirect("/signin");
   const tree = await ownedTree(treeId, user.id);
   if (!tree) return fail("You don't have access to that tree.");
-  const fields = personFields(formData);
-  const name = displayName(fields);
+  const fields = parsePersonFields(formData);
+  const name = displayNameOf(fields);
   const id = await insertPerson(treeId, fields);
   if (!tree.focusPersonId) {
     await db
@@ -178,71 +103,11 @@ export async function addRelativeAction(
   if (denied) return denied;
   const anchorId = String(formData.get("anchorId") ?? "");
   const relation = String(formData.get("relation") ?? "") as Relation;
-  if (!anchorId || !["father", "mother", "spouse", "child"].includes(relation)) {
-    return fail("That relationship slot isn't available — reload the page and try again.");
-  }
-
-  const fields = personFields(formData);
-  const name = displayName(fields);
-  if (relation === "father" || relation === "mother") {
-    const newId = await insertPerson(treeId, {
-      ...fields,
-      gender: fields.gender ?? (relation === "father" ? "m" : "f"),
-    });
-    const parentUnions = await parentUnionsOf(anchorId);
-    // Fill an open partner slot if one exists; otherwise start a new family
-    // (step/adoptive parent, or the first parent of a previously unknown pair).
-    const open = parentUnions.find((u) => u.partnerBId === null);
-    if (open) {
-      await db
-        .update(unions)
-        .set({ partnerBId: newId })
-        .where(eq(unions.id, open.id));
-    } else {
-      const unionId = randomUUID();
-      await db.insert(unions).values({
-        id: unionId,
-        treeId,
-        partnerAId: newId,
-        partnerBId: null,
-      });
-      await db
-        .insert(parentChild)
-        .values({ id: randomUUID(), unionId, childId: anchorId });
-    }
-  } else if (relation === "spouse") {
-    const newId = await insertPerson(treeId, fields);
-    await db.insert(unions).values({
-      id: randomUUID(),
-      treeId,
-      partnerAId: anchorId,
-      partnerBId: newId,
-    });
-  } else {
-    // child: attach to the anchor's couple union if one exists, else to a
-    // single-parent union created for the anchor.
-    const myUnions = await unionsOfPartner(treeId, anchorId);
-    let target = myUnions.find((u) => u.partnerBId !== null);
-    if (!target) target = myUnions[myUnions.length - 1];
-    if (!target) {
-      const unionId = randomUUID();
-      await db.insert(unions).values({
-        id: unionId,
-        treeId,
-        partnerAId: anchorId,
-        partnerBId: null,
-      });
-      target = { id: unionId } as typeof target;
-    }
-    const childId = await insertPerson(treeId, fields);
-    await db
-      .insert(parentChild)
-      .values({ id: randomUUID(), unionId: target.id, childId });
-  }
-
-  await touchTree(treeId);
+  const fields = parsePersonFields(formData);
+  const result = await addRelativeToTree(treeId, anchorId, relation, fields);
+  if (!result.ok) return result;
   revalidateTree(treeId, anchorId);
-  return { ok: true, message: name };
+  return result;
 }
 
 export async function updatePersonAction(
@@ -254,14 +119,11 @@ export async function updatePersonAction(
   const personId = String(formData.get("personId") ?? "");
   if (!personId) return fail("That person is no longer in this tree.");
 
-  const fields = personFields(formData);
-  await db
-    .update(persons)
-    .set({ ...fields, updatedAt: new Date() })
-    .where(and(eq(persons.id, personId), eq(persons.treeId, treeId)));
-  await touchTree(treeId);
+  const fields = parsePersonFields(formData);
+  const result = await updatePersonInTree(treeId, personId, fields);
+  if (!result.ok) return result;
   revalidateTree(treeId, personId);
-  return { ok: true, message: displayName(fields) };
+  return result;
 }
 
 export async function deletePersonAction(formData: FormData): Promise<void> {
