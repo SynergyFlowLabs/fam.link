@@ -29,9 +29,18 @@ npm run lint    # eslint
 npm test        # unit tests for pure logic
 ```
 
+## What's inside
+
+- **Tree canvas** — person-centric DAG with alternate layouts (`hourglass` · `pedigree` · `descendant` · `fan` · `list`), compact density, minimap, and undo.
+- **Story layer** — text, photo, and voice memories per person (MediaRecorder recording, inline playback), comments, labels, custom fields, suggestions, ask-a-relative links for relatives without accounts.
+- **Gallery & sources** — one grid for every photo, voice clip, document, and scan, with citations ("how do you know?") attachable to people, memories, and events.
+- **Story prompts & walkthrough** — gentle interview questions (sendable as ask-a-relative links) and a slide-per-person narrative walkthrough of any family line, shareable read-only with the living redacted.
+- **Family book** — a print-optimized keepsake view and a real PDF download (typeset in Fraunces, A4/Letter, living relatives redacted or omitted by the owner).
+- **Insights** — gentle, local-only analytics: story coverage per branch, generation gaps, people without stories. Opt-out anytime; nothing leaves fam.link.
+
 ## Stack
 
-Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · SQLite + Drizzle ORM (Postgres-ready) · custom SVG tree canvas with alternate layouts (`hourglass` · `pedigree` · `descendant` · `fan` · `list`, `?layout=` + `localStorage`, compact density toggle).
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · SQLite + Drizzle ORM (Postgres-ready) · custom SVG tree canvas · PDF generation via @react-pdf (pure Node).
 
 ## Databases
 
