@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { layoutTree, NODE_W, NODE_H, type LayoutResult } from "@/lib/layout/engine";
+import {
+  layoutTree,
+  NODE_W,
+  NODE_H,
+  PADDING,
+  ROW_GAP,
+  type LayoutResult,
+} from "@/lib/layout/engine";
 import { coupleEdgeD, parentChildEdgeD } from "@/lib/layout/edges";
 import {
   displayName,
@@ -94,7 +101,10 @@ export function TreeCanvas({
   const layout: LayoutResult = useMemo(
     () =>
       layoutTree({
-        persons: persons.map((p) => ({ id: p.id })),
+        persons: persons.map((p) => ({
+          id: p.id,
+          birthHint: p.birthDateText,
+        })),
         unions,
         links,
         focusPersonId,
@@ -134,17 +144,28 @@ export function TreeCanvas({
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const [view, setView] = useState<View>(() => ({
-    x: 0,
-    y: 0,
-    w: Math.max(layout.width, MIN_W),
-  }));
+
+  /** Open on the focus person at a readable zoom — not the whole wide
+   *  canvas. The row of the focus stays centre-stage; ancestors and
+   *  descendants flow away from it. */
+  const focusView = useCallback(
+    (lo: LayoutResult): View =>
+      clampViewTo(
+        lo.focusX - Math.min(Math.max(lo.width, MIN_W), 1500) / 2,
+        lo.focusY - (Math.min(Math.max(lo.width, MIN_W), 1500) * 0.6) / 2,
+        Math.min(Math.max(lo.width, MIN_W), 1500),
+        0.6,
+        contentBounds,
+      ),
+    [contentBounds],
+  );
+  const [view, setView] = useState<View>(() => focusView(layout));
   // Reset the view when the layout changes (new people added) — the
   // React-approved "adjust state during render" pattern.
   const [prevLayout, setPrevLayout] = useState(layout);
   if (prevLayout !== layout) {
     setPrevLayout(layout);
-    setView({ x: 0, y: 0, w: Math.max(layout.width, MIN_W) });
+    setView(focusView(layout));
   }
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -185,9 +206,28 @@ export function TreeCanvas({
     return () => ro.disconnect();
   }, []);
 
+  /** Fit: the whole tree in view, both dimensions, with breathing room. */
   const fit = useCallback(() => {
-    setView({ x: 0, y: 0, w: Math.max(layout.width, MIN_W) });
-  }, [layout.width]);
+    if (!contentBounds) {
+      setView({ x: 0, y: 0, w: MIN_W });
+      return;
+    }
+    const pad = 60;
+    const wContent = contentBounds.maxX - contentBounds.minX + pad * 2;
+    const hContent = contentBounds.maxY - contentBounds.minY + pad * 2;
+    const w = Math.min(
+      Math.max(wContent, hContent / aspect, MIN_W),
+      Math.max(layout.width, layout.height / aspect) * 1.25,
+    );
+    const h = w * aspect;
+    setView(
+      clampView(
+        (contentBounds.minX + contentBounds.maxX) / 2 - w / 2,
+        (contentBounds.minY + contentBounds.maxY) / 2 - h / 2,
+        w,
+      ),
+    );
+  }, [aspect, clampView, contentBounds, layout.width, layout.height]);
 
   useEffect(() => {
     return () => {
@@ -265,6 +305,29 @@ export function TreeCanvas({
         Math.min(...layout.nodes.map((n) => n.generation)) +
         1
       : 0;
+  // Zebra bands keep wide rows readable: one stripe per generation, labels
+  // on the left rail (skipped for single-generation trees).
+  const genRows = useMemo(() => {
+    if (generations < 2 || !contentBounds) return [];
+    const minGen = Math.min(...layout.nodes.map((n) => n.generation));
+    return [...new Set(layout.nodes.map((n) => n.generation))]
+      .sort((a, b) => a - b)
+      .map((g) => {
+        const bandTop =
+          PADDING + NODE_H / 2 + (g - minGen) * ROW_GAP - ROW_GAP / 2;
+        return { g, bandTop };
+      });
+  }, [generations, contentBounds, layout.nodes]);
+  const genLabel = (g: number): string => {
+    if (g === 0) return "Focus";
+    if (g === 1) return "Children";
+    if (g === 2) return "Grandchildren";
+    if (g > 2) return `Gen +${g}`;
+    if (g === -1) return "Parents";
+    if (g === -2) return "Grandparents";
+    if (g === -3) return "Great- grandparents";
+    return `Gen ${g}`;
+  };
   const totalMemories = persons.reduce((s, p) => s + p.memoryCount, 0);
   const focusPerson = personById.get(focusPersonId);
 
@@ -390,6 +453,34 @@ export function TreeCanvas({
             height={view.w * aspect}
             fill="url(#canvas-dots)"
           />
+          {genRows.map(({ g, bandTop }) => (
+            <g key={g}>
+              <rect
+                x={contentBounds ? contentBounds.minX - 190 : 0}
+                y={bandTop}
+                width={
+                  contentBounds
+                    ? contentBounds.maxX - contentBounds.minX + 250
+                    : 0
+                }
+                height={ROW_GAP}
+                fill="var(--color-evergreen)"
+                opacity={g % 2 === 0 ? 0.05 : 0.02}
+              />
+              {contentBounds && (
+                <text
+                  x={contentBounds.minX - 24}
+                  y={bandTop + ROW_GAP / 2}
+                  textAnchor="end"
+                  dominantBaseline="middle"
+                  className="fill-ink-soft/70"
+                  style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.04em" }}
+                >
+                  {genLabel(g)}
+                </text>
+              )}
+            </g>
+          ))}
           <Edges
             unions={unions}
             links={links}
