@@ -7,6 +7,9 @@ import { trees } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canEdit } from "@/lib/roles";
+import { diffPersonFields, fieldsOf, type PersonFields } from "@/lib/person-fields";
+import { persons as personsTable } from "@/db/schema";
+import { inArray } from "drizzle-orm";
 import { listTreeSuggestions } from "@/lib/public-trees";
 import { parseSuggestionPayload } from "@/lib/person-fields";
 import { SuggestionReviewButtons } from "@/components/suggest-forms";
@@ -51,7 +54,8 @@ export default async function SuggestionsPage({
   if (!user) redirect("/signin");
   const access = await getTreeAccess(treeId, user.id);
   if (!access) notFound();
-  if (!canEdit(access.role)) redirect(`/app/trees/${treeId}`);
+  // Every member can follow the queue (issue #34); reviewing stays editor+.
+  const canReview = canEdit(access.role);
 
   const treeRows = await db
     .select({ name: trees.name, visibility: trees.visibility })
@@ -64,6 +68,19 @@ export default async function SuggestionsPage({
   const suggestions = await listTreeSuggestions(treeId);
   const pending = suggestions.filter((s) => s.suggestion.status === "pending");
   const reviewed = suggestions.filter((s) => s.suggestion.status !== "pending");
+
+  // Old values for the diff view (issue #34): only edit_person targets.
+  const editTargets = [...new Set(pending.filter((p) => p.suggestion.type === "edit_person").map((p) => p.suggestion.personId))];
+  const oldFieldsById = new Map<string, PersonFields>();
+  if (editTargets.length > 0) {
+    const rows = await db
+      .select()
+      .from(personsTable)
+      .where(inArray(personsTable.id, editTargets));
+    for (const row of rows) {
+      oldFieldsById.set(row.id, fieldsOf(row));
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -112,23 +129,43 @@ export default async function SuggestionsPage({
                   </span>
                 </div>
 
-                {fields && (
-                  <dl className="mt-3 text-sm">
-                    {FIELD_LABELS.map(([key, label]) => {
-                      const value = fields[key];
-                      if (value === null || value === false) return null;
-                      return (
+                {fields && (() => {
+                  const oldFields = suggestion.type === "edit_person" ? oldFieldsById.get(suggestion.personId) : undefined;
+                  const diff = oldFields ? diffPersonFields(oldFields, fields) : null;
+                  return diff && diff.length > 0 ? (
+                    <dl className="mt-3 text-sm">
+                      {diff.map((d) => (
                         <div
-                          key={key}
-                          className="flex justify-between gap-4 border-t border-line/70 py-1.5 first:border-t-0"
+                          key={d.key}
+                          className="flex flex-wrap items-baseline justify-between gap-2 border-t border-line/70 py-1.5 first:border-t-0"
                         >
-                          <dt className="text-ink-soft">{label}</dt>
-                          <dd className="text-right text-ink">{String(value)}</dd>
+                          <dt className="text-ink-soft">{d.label}</dt>
+                          <dd className="text-right text-ink">
+                            <span className="text-ink-soft/70 line-through">{d.oldText}</span>
+                            {" → "}
+                            <span className="font-medium">{d.newText}</span>
+                          </dd>
                         </div>
-                      );
-                    })}
-                  </dl>
-                )}
+                      ))}
+                    </dl>
+                  ) : (
+                    <dl className="mt-3 text-sm">
+                      {FIELD_LABELS.map(([key, label]) => {
+                        const value = fields[key];
+                        if (value === null || value === false) return null;
+                        return (
+                          <div
+                            key={key}
+                            className="flex justify-between gap-4 border-t border-line/70 py-1.5 first:border-t-0"
+                          >
+                            <dt className="text-ink-soft">{label}</dt>
+                            <dd className="text-right text-ink">{String(value)}</dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  );
+                })()}
 
                 {suggestion.note && (
                   <blockquote className="mt-3 border-l-[3px] border-gold/60 pl-3 text-sm italic text-ink-soft">
@@ -136,12 +173,14 @@ export default async function SuggestionsPage({
                   </blockquote>
                 )}
 
-                <div className="mt-4">
-                  <SuggestionReviewButtons
-                    treeId={treeId}
-                    suggestionId={suggestion.id}
-                  />
-                </div>
+                {canReview && (
+                  <div className="mt-4">
+                    <SuggestionReviewButtons
+                      treeId={treeId}
+                      suggestionId={suggestion.id}
+                    />
+                  </div>
+                )}
               </li>
             );
           })}

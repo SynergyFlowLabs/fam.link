@@ -23,6 +23,8 @@ export const ACTIVITY_ACTIONS = [
   "add_comment",
   "delete_comment",
   "resolve_comment",
+  "suggest",
+  "review_suggestion",
   "undo",
 ] as const;
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
@@ -62,6 +64,10 @@ export function actionVerb(action: ActivityAction): string {
       return "removed a comment on";
     case "resolve_comment":
       return "settled a discussion on";
+    case "suggest":
+      return "suggested a change for";
+    case "review_suggestion":
+      return "reviewed a suggestion for";
     case "undo":
       return "undid an action in";
   }
@@ -84,6 +90,9 @@ export interface ActivityDetail {
   commentId?: string;
   /** For resolve_comment: true = resolved, false = reopened. */
   threadResolved?: boolean;
+  /** For suggestion entries. */
+  suggestionKind?: string;
+  suggestionApproved?: boolean;
   [key: string]: unknown;
 }
 
@@ -150,6 +159,12 @@ export function describeActivity(action: ActivityAction, detail: ActivityDetail,
       return `removed a comment on ${detail.memory ? `a memory of ${name}` : name}`;
     case "resolve_comment":
       return `${detail.threadResolved ? "resolved" : "reopened"} the discussion on ${detail.memory ? `a memory of ${name}` : name}`;
+    case "suggest":
+      return detail.suggestionKind === "add_relative"
+        ? `suggested adding a ${detail.relation ?? "relative"} of ${name}`
+        : `suggested an edit for ${name}`;
+    case "review_suggestion":
+      return `${detail.suggestionApproved ? "approved" : "rejected"} a suggestion for ${name}`;
     case "undo":
       return `undid: ${detail.undoneSummary ?? "an earlier change"}`;
   }

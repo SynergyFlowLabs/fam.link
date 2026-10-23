@@ -1,9 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+
   displayNameOf,
   parsePersonFields,
   parseSuggestionPayload,
+  diffPersonFields,
+  type PersonFields,
 } from "./person-fields.ts";
 
 function formOf(entries: Record<string, unknown>) {
@@ -120,5 +123,25 @@ describe("displayNameOf", () => {
     );
     assert.equal(displayNameOf({ firstName: null, lastName: null }), "Someone");
     assert.equal(displayNameOf({ firstName: "Zoya", lastName: null }), "Zoya");
+  });
+
+  it("diffPersonFields lists only changed fields with readable text", () => {
+    const before: PersonFields = {
+      firstName: "Ahmed", lastName: "Raza", alsoKnownAs: null, gender: "m",
+      living: true, birthDateText: "1948", birthPlace: "Lahore",
+      deathDateText: null, deathPlace: null, notes: null,
+    };
+    const after: PersonFields = {
+      ...before, firstName: "Ahmed ", lastName: "Raza", living: false,
+      deathDateText: "2020", birthPlace: null,
+    };
+    const diff = diffPersonFields(before, after);
+    // firstName trims to the same value — not a change
+    assert.deepEqual(diff.map((d) => d.label), ["Status", "Birthplace", "Died"]);
+    assert.equal(diff[0]!.oldText, "Living");
+    assert.equal(diff[0]!.newText, "At rest");
+    assert.equal(diff.find((d) => d.label === "Born"), undefined); // unchanged
+    assert.equal(diff.find((d) => d.label === "Birthplace")!.oldText, "Lahore");
+    assert.equal(diff.find((d) => d.label === "Birthplace")!.newText, "—");
   });
 });

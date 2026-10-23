@@ -14,6 +14,7 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canComment, canEdit } from "@/lib/roles";
+import { personWithinScope } from "@/lib/branch-writes";
 import {
   validateFieldDef,
   validateFieldValue,
@@ -23,6 +24,16 @@ import {
 import { labelKey } from "@/lib/labels";
 import { fail, OK, type ActionResult } from "@/lib/action-result";
 import { touchTree } from "@/lib/tree-mutations";
+
+/** Branch-scoped members may write values only inside their branch (issue #34). */
+async function requireScope(
+  scopePersonId: string | null | undefined,
+  treeId: string,
+  personId: string,
+): Promise<ActionResult | null> {
+  if (await personWithinScope(scopePersonId, treeId, personId)) return null;
+  return fail("That person is outside your branch — ask the owner to widen your scope.");
+}
 
 async function requireAccess(treeId: string, need: "edit" | "comment") {
   const user = await getCurrentUser();
@@ -153,8 +164,10 @@ export async function setPersonCustomValueAction(formData: FormData): Promise<Ac
   const fieldId = String(formData.get("fieldId") ?? "");
   const rawValue = String(formData.get("value") ?? "");
 
-  const { error } = await requireAccess(treeId, "edit");
-  if (error) return error;
+  const { error, access } = await requireAccess(treeId, "edit");
+  if (error || !access) return error ?? fail("You don't have access to that tree.");
+  const scopeFail = await requireScope(access.scopePersonId, treeId, personId);
+  if (scopeFail) return scopeFail;
 
   if (!personId || !fieldId) return fail("Missing person or field.");
 
@@ -218,8 +231,10 @@ export async function removePersonCustomValueAction(formData: FormData): Promise
   const personId = String(formData.get("personId") ?? "");
   const fieldId = String(formData.get("fieldId") ?? "");
 
-  const { error } = await requireAccess(treeId, "edit");
-  if (error) return error;
+  const { error, access } = await requireAccess(treeId, "edit");
+  if (error || !access) return error ?? fail("You don't have access to that tree.");
+  const scopeFail = await requireScope(access.scopePersonId, treeId, personId);
+  if (scopeFail) return scopeFail;
 
   if (!personId || !fieldId) return fail("Missing person or field.");
 
@@ -240,8 +255,17 @@ export async function setMemoryCustomValueAction(formData: FormData): Promise<Ac
   const fieldId = String(formData.get("fieldId") ?? "");
   const rawValue = String(formData.get("value") ?? "");
 
-  const { error } = await requireAccess(treeId, "comment");
-  if (error) return error;
+  const { error, access } = await requireAccess(treeId, "comment");
+  if (error || !access) return error ?? fail("You don't have access to that tree.");
+  {
+    const memRows = await db
+      .select({ personId: memories.personId })
+      .from(memories)
+      .where(eq(memories.id, memoryId))
+      .limit(1);
+    const scopeFail = await requireScope(access.scopePersonId, treeId, memRows[0]?.personId ?? "");
+    if (scopeFail) return scopeFail;
+  }
 
   if (!memoryId || !fieldId) return fail("Missing memory or field.");
 

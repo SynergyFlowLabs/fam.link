@@ -20,6 +20,35 @@ export interface PersonFields {
 
 type FieldSource = { get(name: string): unknown };
 
+/** Read PersonFields straight off a person row (DB select). */
+export function fieldsOf(
+  row: {
+    firstName: string | null;
+    lastName: string | null;
+    alsoKnownAs: string | null;
+    gender: "m" | "f" | "x" | null;
+    living: boolean;
+    birthDateText: string | null;
+    birthPlace: string | null;
+    deathDateText: string | null;
+    deathPlace: string | null;
+    notes: string | null;
+  },
+): PersonFields {
+  return {
+    firstName: row.firstName,
+    lastName: row.lastName,
+    alsoKnownAs: row.alsoKnownAs,
+    gender: row.gender,
+    living: row.living,
+    birthDateText: row.birthDateText,
+    birthPlace: row.birthPlace,
+    deathDateText: row.deathDateText,
+    deathPlace: row.deathPlace,
+    notes: row.notes,
+  };
+}
+
 export function parsePersonFields(source: FieldSource): PersonFields {
   const text = (name: string): string | null => {
     const v = String(source.get(name) ?? "").trim();
@@ -91,4 +120,43 @@ export function parseSuggestionPayload(raw: string): PersonFields | null {
     deathPlace: v.living === true ? null : str(v.deathPlace),
     notes: str(v.notes),
   };
+}
+
+// ---------- suggestion diff (issue #34) ----------
+
+export const PERSON_FIELD_LABELS: [keyof PersonFields, string][] = [
+  ["firstName", "First name"],
+  ["lastName", "Family name"],
+  ["alsoKnownAs", "Known as"],
+  ["gender", "Gender"],
+  ["living", "Status"],
+  ["birthDateText", "Born"],
+  ["birthPlace", "Birthplace"],
+  ["deathDateText", "Died"],
+  ["deathPlace", "Resting place"],
+  ["notes", "Notes"],
+];
+
+function fieldText(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "boolean") return v ? "Living" : "At rest";
+  if (typeof v === "string") return v.trim() === "" ? "—" : v.trim();
+  return String(v);
+}
+
+/**
+ * Old vs proposed for the review queue's diff view — only fields that
+ * actually change, in canonical order.
+ */
+export function diffPersonFields(
+  oldF: PersonFields,
+  proposed: PersonFields,
+): { key: keyof PersonFields; label: string; oldText: string; newText: string }[] {
+  const out: { key: keyof PersonFields; label: string; oldText: string; newText: string }[] = [];
+  for (const [key, label] of PERSON_FIELD_LABELS) {
+    const before = fieldText(oldF[key]);
+    const after = fieldText(proposed[key]);
+    if (before !== after) out.push({ key, label, oldText: before, newText: after });
+  }
+  return out;
 }

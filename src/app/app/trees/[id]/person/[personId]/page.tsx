@@ -13,6 +13,7 @@ import { relationLabel } from "@/lib/layout/edges";
 import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
 import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/labels-fields";
 import { PersonTimelineSection } from "@/components/person-events";
+import { SuggestEditForm, SuggestRelativeForm } from "@/components/suggest-forms";
 import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
 import { sortEvents } from "@/lib/person-events";
 import { filterDefsForViewer } from "@/lib/custom-fields";
@@ -319,6 +320,43 @@ export default async function PersonPage({
           canEdit={canEdit(role)}
         />
       </div>
+
+      {!canEdit(role) && (
+        <details className="mt-6 rounded-2xl border border-line bg-card p-5">
+          <summary className="cursor-pointer text-sm font-medium text-ink-soft transition-colors hover:text-evergreen">
+            ✍️ Suggest an edit — corrections go to the tree&apos;s editors
+          </summary>
+          <div className="mt-4 grid gap-6 md:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-semibold text-ink">Correct {name}&apos;s facts</h3>
+              <div className="mt-3">
+                <SuggestEditForm
+                  treeId={treeId}
+                  person={{
+                    id: person.id,
+                    firstName: person.firstName,
+                    lastName: person.lastName,
+                    alsoKnownAs: person.alsoKnownAs,
+                    gender: person.gender,
+                    living: person.living,
+                    birthDateText: person.birthDateText,
+                    birthPlace: person.birthPlace,
+                    deathDateText: person.deathDateText,
+                    deathPlace: person.deathPlace,
+                    notes: person.notes,
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink">Add a missing relative</h3>
+              <div className="mt-3">
+                <SuggestRelativeForm treeId={treeId} personId={personId} personName={name} />
+              </div>
+            </div>
+          </div>
+        </details>
+      )}
 
       <div className="mt-6">
         <CommentSection
