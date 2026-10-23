@@ -4,7 +4,13 @@
  * or succeeding silently.
  */
 export type ActionResult =
-  | { ok: true; message?: string; token?: string; personId?: string }
+  | {
+      ok: true;
+      message?: string;
+      token?: string;
+      personId?: string;
+      sourceId?: string;
+    }
   | { ok: false; error?: string };
 
 export const OK: ActionResult = { ok: true };

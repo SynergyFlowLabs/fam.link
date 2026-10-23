@@ -1,4 +1,12 @@
-import { sqliteTable, text, integer, index, uniqueIndex, real } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  index,
+  uniqueIndex,
+  real,
+  primaryKey,
+} from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 /**
@@ -177,6 +185,17 @@ export const media = sqliteTable(
     sizeBytes: integer("size_bytes").notNull(),
     // Audio clips only (voice memories, issue #36) — seconds, rounded.
     durationSeconds: integer("duration_seconds"),
+    // Gallery/source management (issue #37): standalone documents & scans
+    // (not tied to a memory), optional provenance note, optional person tag.
+    sourceType: text("source_type", {
+      enum: ["memory", "document", "scan"],
+    })
+      .notNull()
+      .default("memory"),
+    provenance: text("provenance"),
+    personId: text("person_id").references(() => persons.id, {
+      onDelete: "set null",
+    }),
     uploadedBy: text("uploaded_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -274,6 +293,85 @@ export const askLinks = sqliteTable(
 );
 
 export type AskLink = typeof askLinks.$inferSelect;
+
+/**
+ * Source citations (issue #37) — the "how do you know?" layer. Free text +
+ * optional URL; deliberately not RootsMagic. Attachable to persons,
+ * memories, and events via the join tables below.
+ */
+export const sources = sqliteTable(
+  "sources",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    // e.g. "Interview with Farida Begum, Oct 2026" or a register page ref
+    citation: text("citation"),
+    url: text("url"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("sources_tree_idx").on(t.treeId)],
+);
+
+export type Source = typeof sources.$inferSelect;
+
+/** person ←→ source (many-to-many). */
+export const personSources = sqliteTable(
+  "person_sources",
+  {
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [primaryKey({ columns: [t.personId, t.sourceId] })],
+);
+
+/** memory ←→ source (many-to-many). */
+export const memorySources = sqliteTable(
+  "memory_sources",
+  {
+    memoryId: text("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [primaryKey({ columns: [t.memoryId, t.sourceId] })],
+);
+
+/** event ←→ source (many-to-many). */
+export const eventSources = sqliteTable(
+  "event_sources",
+  {
+    eventId: text("event_id")
+      .notNull()
+      .references(() => personEvents.id, { onDelete: "cascade" }),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [primaryKey({ columns: [t.eventId, t.sourceId] })],
+);
 
 /**
  * A staged-but-unconfirmed GEDCOM import. The parsed plan is stored as JSON;
@@ -669,11 +767,20 @@ export const activityFeed = sqliteTable(
         "suggest",
         "review_suggestion",
         "ask",
+        "source",
         "undo",
       ],
     }).notNull(),
     targetType: text("target_type", {
-      enum: ["person", "memory", "event", "invite", "share_link", "tree"],
+      enum: [
+        "person",
+        "memory",
+        "event",
+        "invite",
+        "share_link",
+        "source",
+        "tree",
+      ],
     }).notNull(),
     targetId: text("target_id"),
     // Snapshot of the target's display name for links (rows may vanish).

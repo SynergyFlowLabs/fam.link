@@ -3,13 +3,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { memories, parentChild, persons, unions } from "@/db/schema";
+import {
+  memories,
+  memorySources,
+  parentChild,
+  persons,
+  sources,
+  unions,
+} from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { getTreeAccess } from "@/lib/access";
 import { canEdit } from "@/lib/roles";
 import { getPublicTree } from "@/lib/public-trees";
 import { displayName, lifeLine, REDACTED_NAME } from "@/lib/canvas-types";
 import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels } from "@/lib/tree-labels";
+import { SourceChips, type SourceRef } from "@/components/source-picker";
 import { listCustomFieldDefs } from "@/lib/tree-labels";
 import { filterDefsForViewer } from "@/lib/custom-fields";
 import { labelColorFor } from "@/lib/labels";
@@ -117,6 +125,25 @@ export default async function ExplorePersonPage({
     .select()
     .from(memories)
     .where(eq(memories.personId, personId));
+
+  // Citations attached to memories (issue #37) — public viewers get the
+  // same muted chips; only deceased persons reach this page at all.
+  const publicMemorySourceRows = memoryRows.length
+    ? await db
+        .select({ memoryId: memorySources.memoryId, source: sources })
+        .from(memorySources)
+        .innerJoin(sources, eq(memorySources.sourceId, sources.id))
+        .where(inArray(memorySources.memoryId, memoryRows.map((m) => m.id)))
+    : [];
+  const publicSourcesByMemory: Record<string, SourceRef[]> = {};
+  for (const r of publicMemorySourceRows) {
+    (publicSourcesByMemory[r.memoryId] ??= []).push({
+      id: r.source.id,
+      title: r.source.title,
+      citation: r.source.citation,
+      url: r.source.url,
+    });
+  }
 
   const personLabels = await getPersonLabels(personId);
   // Public viewers are never the owner — private fields never show (issue #33).
@@ -254,6 +281,23 @@ export default async function ExplorePersonPage({
                       key={m.id}
                       className="rounded-xl border border-line/70 bg-paper px-4 py-3"
                     >
+                      {m.mediaId && m.kind === "photo" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`/api/media/${m.mediaId}`}
+                          alt={m.body || "Memory photo"}
+                          loading="lazy"
+                          className="mb-2 max-h-64 w-auto rounded-lg border border-line"
+                        />
+                      ) : null}
+                      {m.mediaId && m.kind === "voice" ? (
+                        <audio
+                          controls
+                          preload="none"
+                          src={`/api/media/${m.mediaId}`}
+                          className="mb-2 w-full"
+                        />
+                      ) : null}
                       <p className="text-sm leading-relaxed text-ink">{m.body}</p>
                       {mLabels.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
@@ -282,6 +326,13 @@ export default async function ExplorePersonPage({
                           year: "numeric",
                         })}
                       </p>
+                      <SourceChips
+                        treeId={treeId}
+                        targetType="memory"
+                        targetId={m.id}
+                        sources={publicSourcesByMemory[m.id] ?? []}
+                        canEdit={false}
+                      />
                     </li>
                   );
                 })}

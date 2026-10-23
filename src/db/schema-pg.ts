@@ -7,6 +7,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -153,6 +154,17 @@ export const media = pgTable(
     sizeBytes: integer("size_bytes").notNull(),
     // Audio clips only (voice memories, issue #36) — seconds, rounded.
     durationSeconds: integer("duration_seconds"),
+    // Gallery/source management (issue #37): standalone documents &
+    // scans (not tied to a memory), provenance note, person tag.
+    sourceType: text("source_type", {
+      enum: ["memory", "document", "scan"],
+    })
+      .notNull()
+      .default("memory"),
+    provenance: text("provenance"),
+    personId: text("person_id").references(() => persons.id, {
+      onDelete: "set null",
+    }),
     uploadedBy: text("uploaded_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -505,11 +517,21 @@ export const activityFeed = pgTable(
         "suggest",
         "review_suggestion",
         "ask",
+        "source",
+        "ask",
         "undo",
       ],
     }).notNull(),
     targetType: text("target_type", {
-      enum: ["person", "memory", "event", "invite", "share_link", "tree"],
+      enum: [
+        "person",
+        "memory",
+        "event",
+        "invite",
+        "share_link",
+        "source",
+        "tree",
+      ],
     }).notNull(),
     targetId: text("target_id"),
     targetLabel: text("target_label"),
@@ -597,6 +619,85 @@ export const askLinks = pgTable(
 );
 
 export type PgAskLink = typeof askLinks.$inferSelect;
+
+/**
+ * Source citations (issue #37) — the "how do you know?" layer. Free text +
+ * optional URL; deliberately not RootsMagic. Attachable to persons,
+ * memories, and events via the join tables below.
+ */
+export const sources = pgTable(
+  "sources",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    // e.g. "Interview with Farida Begum, Oct 2026" or a register page ref
+    citation: text("citation"),
+    url: text("url"),
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("sources_tree_idx").on(t.treeId)],
+);
+
+export type PgSource = typeof sources.$inferSelect;
+
+/** person ←→ source (many-to-many). */
+export const personSources = pgTable(
+  "person_sources",
+  {
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.personId, t.sourceId] })],
+);
+
+/** memory ←→ source (many-to-many). */
+export const memorySources = pgTable(
+  "memory_sources",
+  {
+    memoryId: text("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.memoryId, t.sourceId] })],
+);
+
+/** event ←→ source (many-to-many). */
+export const eventSources = pgTable(
+  "event_sources",
+  {
+    eventId: text("event_id")
+      .notNull()
+      .references(() => personEvents.id, { onDelete: "cascade" }),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.eventId, t.sourceId] })],
+);
 
 
 export type PgUser = typeof users.$inferSelect;

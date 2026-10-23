@@ -1,6 +1,6 @@
 import { readdir, unlink } from "node:fs/promises";
 import path from "node:path";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { db, DATA_DIR } from "@/db";
 import { media, memories, persons } from "@/db/schema";
 import {
@@ -49,12 +49,19 @@ export async function sweepTreeMedia(treeId: string): Promise<void> {
     .select({ photoMediaId: persons.photoMediaId })
     .from(persons)
     .where(eq(persons.treeId, treeId));
+  // Standalone gallery documents/scans (issue #37) are referenced by their
+  // person tag — a media row with a person_id belongs to the gallery.
+  const documentRows = await db
+    .select({ id: media.id })
+    .from(media)
+    .where(and(eq(media.treeId, treeId), isNotNull(media.personId)));
 
   const orphans = pickOrphanMedia(
     rows,
     collectReferencedMediaIds({
       memoryMediaIds: memoryMediaIds.map((m) => m.mediaId),
       personPhotoIds: personPhotoIds.map((p) => p.photoMediaId),
+      documentMediaIds: documentRows.map((d) => d.id),
     }),
   );
   if (orphans.length === 0) return;

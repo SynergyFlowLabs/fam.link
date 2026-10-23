@@ -20,18 +20,23 @@ export function pickOrphanMedia<M extends MediaLike>(
 }
 
 /**
- * The set of media ids a tree still references: every memory photo and every
- * person avatar in that tree.
+ * The set of media ids a tree still references: every memory photo/voice
+ * clip, every person avatar, and every standalone gallery document/scan
+ * (media rows tagged to a person, issue #37).
  */
 export function collectReferencedMediaIds(input: {
   memoryMediaIds: (string | null | undefined)[];
   personPhotoIds: (string | null | undefined)[];
+  documentMediaIds?: (string | null | undefined)[];
 }): Set<string> {
   const ids = new Set<string>();
   for (const id of input.memoryMediaIds) {
     if (id) ids.add(id);
   }
   for (const id of input.personPhotoIds) {
+    if (id) ids.add(id);
+  }
+  for (const id of input.documentMediaIds ?? []) {
     if (id) ids.add(id);
   }
   return ids;

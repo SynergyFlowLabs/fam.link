@@ -26,6 +26,7 @@ import type {
   ActivityFeed,
   Comment,
   AskLink,
+  Source,
 } from "./schema.ts";
 import type {
   PgMemory,
@@ -49,6 +50,7 @@ import type {
   PgActivityFeed,
   PgComment,
   PgAskLink,
+  PgSource,
 } from "./schema-pg.ts";
 
 /**
@@ -85,6 +87,10 @@ const SQLITE_TABLES = {
   activityFeed: sqlite.activityFeed,
   comments: sqlite.comments,
   askLinks: sqlite.askLinks,
+  sources: sqlite.sources,
+  personSources: sqlite.personSources,
+  memorySources: sqlite.memorySources,
+  eventSources: sqlite.eventSources,
 } as const;
 
 const PG_TABLES = {
@@ -112,6 +118,10 @@ const PG_TABLES = {
   activityFeed: pg.activityFeed,
   comments: pg.comments,
   askLinks: pg.askLinks,
+  sources: pg.sources,
+  personSources: pg.personSources,
+  memorySources: pg.memorySources,
+  eventSources: pg.eventSources,
 } as const;
 
 describe("schema parity (sqlite ↔ postgres)", () => {
@@ -187,4 +197,6 @@ export type SchemaParityCheck = [
   Comment extends PgComment ? true : never,
   PgAskLink extends AskLink ? true : never,
   AskLink extends PgAskLink ? true : never,
+  PgSource extends Source ? true : never,
+  Source extends PgSource ? true : never,
 ];

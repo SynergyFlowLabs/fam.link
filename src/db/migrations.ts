@@ -161,5 +161,19 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
     statements: [
       "ALTER TABLE `media` ADD COLUMN `duration_seconds` integer;",
     ],
+  },  {
+    // Sources & provenance (issue #37, P4.2) — citations attachable to
+    // persons, memories, and events; media gains document/scan support.
+    name: "0014_sources",
+    statements: [
+      "CREATE TABLE IF NOT EXISTS `sources` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`title` text NOT NULL,\n\t`citation` text,\n\t`url` text,\n\t`created_by` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+      "CREATE INDEX IF NOT EXISTS `sources_tree_idx` ON `sources` (`tree_id`);",
+      "CREATE TABLE IF NOT EXISTS `person_sources` (\n\t`person_id` text NOT NULL,\n\t`source_id` text NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tPRIMARY KEY (`person_id`, `source_id`),\n\tFOREIGN KEY (`person_id`) REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`source_id`) REFERENCES `sources`(`id`) ON UPDATE no action ON DELETE cascade\n);",
+      "CREATE TABLE IF NOT EXISTS `memory_sources` (\n\t`memory_id` text NOT NULL,\n\t`source_id` text NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tPRIMARY KEY (`memory_id`, `source_id`),\n\tFOREIGN KEY (`memory_id`) REFERENCES `memories`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`source_id`) REFERENCES `sources`(`id`) ON UPDATE no action ON DELETE cascade\n);",
+      "CREATE TABLE IF NOT EXISTS `event_sources` (\n\t`event_id` text NOT NULL,\n\t`source_id` text NOT NULL,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\tPRIMARY KEY (`event_id`, `source_id`),\n\tFOREIGN KEY (`event_id`) REFERENCES `person_events`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`source_id`) REFERENCES `sources`(`id`) ON UPDATE no action ON DELETE cascade\n);",
+      "ALTER TABLE `media` ADD `source_type` text DEFAULT 'memory' NOT NULL;",
+      "ALTER TABLE `media` ADD `provenance` text;",
+      "ALTER TABLE `media` ADD COLUMN `person_id` REFERENCES `persons`(`id`) ON DELETE set null;",
+    ],
   },
 ];

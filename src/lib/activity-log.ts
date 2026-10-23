@@ -14,7 +14,14 @@ export interface LogActivityInput {
   actorUserId: string | null;
   actorName: string;
   action: ActivityAction;
-  targetType: "person" | "memory" | "event" | "invite" | "share_link" | "tree";
+  targetType:
+    | "person"
+    | "memory"
+    | "event"
+    | "invite"
+    | "share_link"
+    | "source"
+    | "tree";
   targetId?: string | null;
   targetLabel?: string | null;
   detail?: Record<string, unknown>;
