@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { memories, parentChild, personEvents, persons, unions } from "@/db/schema";
 import { CommentSection, type CommentDTO } from "@/components/comments/comment-thread";
@@ -13,6 +13,8 @@ import { relationLabel } from "@/lib/layout/edges";
 import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
 import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/labels-fields";
 import { PersonTimelineSection } from "@/components/person-events";
+import { AskRelativesSection, type AskLinkItem } from "@/components/ask-relatives";
+import { askLinks } from "@/db/schema";
 import { SuggestEditForm, SuggestRelativeForm } from "@/components/suggest-forms";
 import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
 import { sortEvents } from "@/lib/person-events";
@@ -153,6 +155,22 @@ export default async function PersonPage({
     list.push(toDTO(c));
     memoryComments.set(c.targetId, list);
   }
+  // Ask-a-relative links for this person (issue #35) — editor+ manage them.
+  const askLinkRows = canEdit(role)
+    ? await db
+        .select()
+        .from(askLinks)
+        .where(and(eq(askLinks.personId, personId), eq(askLinks.treeId, treeId)))
+        .orderBy(desc(askLinks.createdAt))
+    : [];
+  const askItems: AskLinkItem[] = askLinkRows.map((l) => ({
+    id: l.id,
+    question: l.question,
+    token: l.token,
+    createdAtMs: new Date(l.createdAt).getTime(),
+    revoked: l.revokedAt !== null,
+  }));
+
   const mentionMembers = await listMentionableMembers(treeId);
   const memberLinks = Object.fromEntries(
     mentionMembers
@@ -227,6 +245,15 @@ export default async function PersonPage({
         <blockquote className="mt-5 border-l-[3px] border-evergreen/40 pl-4 font-display text-[15px] leading-relaxed text-ink-soft italic">
           {person.notes}
         </blockquote>
+      )}
+
+      {canEdit(role) && (
+        <AskRelativesSection
+          treeId={treeId}
+          personId={personId}
+          personName={name}
+          initialLinks={askItems}
+        />
       )}
 
       <div className="mt-8 grid gap-6 md:grid-cols-[1fr_1.4fr]">

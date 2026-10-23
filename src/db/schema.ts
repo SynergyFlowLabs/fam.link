@@ -242,6 +242,38 @@ export const shareLinks = sqliteTable(
 );
 
 /**
+ * Ask-a-relative links (issue #35): one question, one shareable URL, one
+ * answer — the Knowledge Holder contributes a memory with no account.
+ * Tokens are CSPRNG base64url; links expire (default 30 days) and can be
+ * revoked (row kept for audit, like share_links).
+ */
+export const askLinks = sqliteTable(
+  "ask_links",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    token: text("token").notNull().unique(), // unguessable, in the URL
+    createdBy: text("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [index("ask_links_tree_idx").on(t.treeId)],
+);
+
+export type AskLink = typeof askLinks.$inferSelect;
+
+/**
  * A staged-but-unconfirmed GEDCOM import. The parsed plan is stored as JSON;
  * nothing touches persons/unions until the owner confirms on the review
  * screen. One pending import per tree (a new upload replaces it).
@@ -634,6 +666,7 @@ export const activityFeed = sqliteTable(
         "resolve_comment",
         "suggest",
         "review_suggestion",
+        "ask",
         "undo",
       ],
     }).notNull(),

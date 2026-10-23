@@ -147,5 +147,13 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
     statements: [
       "ALTER TABLE `custom_field_defs` ADD COLUMN `visibility` text DEFAULT 'shared' NOT NULL;",
     ],
+  },  {
+    // Ask-a-relative links (issue #35, P3.5)
+    name: "0012_ask_links",
+    statements: [
+      "CREATE TABLE IF NOT EXISTS `ask_links` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`tree_id` text NOT NULL,\n\t`person_id` text NOT NULL,\n\t`question` text NOT NULL,\n\t`token` text NOT NULL,\n\t`created_by` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\t`expires_at` integer,\n\t`revoked_at` integer,\n\tFOREIGN KEY (`tree_id`) REFERENCES `trees`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`person_id`) REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE cascade,\n\tFOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE set null\n);",
+      "CREATE UNIQUE INDEX IF NOT EXISTS `ask_links_token_unique` ON `ask_links` (`token`);",
+      "CREATE INDEX IF NOT EXISTS `ask_links_tree_idx` ON `ask_links` (`tree_id`);",
+    ],
   },
 ];

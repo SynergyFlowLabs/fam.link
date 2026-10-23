@@ -504,5 +504,35 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
     statements: [
       `ALTER TABLE "custom_field_defs" ADD COLUMN IF NOT EXISTS "visibility" text DEFAULT 'shared' NOT NULL`,
     ],
+  },  {
+    // Ask-a-relative links (issue #35, P3.5)
+    name: "0009_ask_links",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "ask_links" (
+         "id" text PRIMARY KEY NOT NULL,
+         "tree_id" text NOT NULL,
+         "person_id" text NOT NULL,
+         "question" text NOT NULL,
+         "token" text NOT NULL,
+         "created_by" text,
+         "created_at" timestamp DEFAULT now() NOT NULL,
+         "expires_at" timestamp,
+         "revoked_at" timestamp
+       )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "ask_links_token_unique" ON "ask_links" ("token")`,
+      `DO $$ BEGIN
+         ALTER TABLE "ask_links" ADD CONSTRAINT "ask_links_tree_id_trees_id_fk"
+           FOREIGN KEY ("tree_id") REFERENCES "trees"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "ask_links" ADD CONSTRAINT "ask_links_person_id_persons_id_fk"
+           FOREIGN KEY ("person_id") REFERENCES "persons"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "ask_links" ADD CONSTRAINT "ask_links_created_by_users_id_fk"
+           FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `CREATE INDEX IF NOT EXISTS "ask_links_tree_idx" ON "ask_links" ("tree_id")`,
+    ],
   },
 ];
