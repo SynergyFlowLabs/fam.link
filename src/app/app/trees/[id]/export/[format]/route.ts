@@ -56,11 +56,29 @@ export async function GET(
             ),
           )
       : [];
+  // Branch scope: if member is scoped, filter everything to branch before privacy redaction
+  const scopeId = (access as unknown as { scopePersonId?: string | null } | null)?.scopePersonId ?? null;
+  let branchIds: Set<string> | null = null;
+  if (scopeId) {
+    const { getBranchPersonIds, filterUnionsByBranch, filterLinksByBranch } = await import("@/lib/branch-scope");
+    branchIds = getBranchPersonIds(scopeId, personRows as never, unionRows as never, linkRows as never);
+    if (!branchIds || branchIds.size === 0) return new Response("Not found", { status: 404 });
+    personRows = personRows.filter((pe) => branchIds!.has(pe.id));
+    // need to reassign unionRows/linkRows filtered
+    const filteredUnions = filterUnionsByBranch(unionRows as never, branchIds) as never[];
+    const filteredLinks = filterLinksByBranch(linkRows as never, branchIds, unionRows as never) as never[];
+    // mutate for later use
+    unionRows.splice(0, unionRows.length, ...filteredUnions as never[]);
+    linkRows.splice(0, linkRows.length, ...filteredLinks as never[]);
+  }
   let memoryRows = await db
     .select()
     .from(memories)
     .innerJoin(persons, eq(memories.personId, persons.id))
     .where(eq(persons.treeId, treeId));
+  if (branchIds) {
+    memoryRows = memoryRows.filter((m: any) => branchIds!.has(m.persons.id));
+  }
   const mediaRows = await db
     .select()
     .from(media)

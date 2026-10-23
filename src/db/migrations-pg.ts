@@ -396,4 +396,24 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
        EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
     ],
   },
+  {
+    name: "0004_branch_scope",
+    statements: [
+      `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "scope_person_id" text REFERENCES "persons"("id") ON DELETE set null`,
+      `ALTER TABLE "tree_invites" ADD COLUMN IF NOT EXISTS "scope_person_id" text REFERENCES "persons"("id") ON DELETE set null`,
+      `ALTER TABLE "tree_members" ADD COLUMN IF NOT EXISTS "scope_person_id" text REFERENCES "persons"("id") ON DELETE set null`,
+      `DO $$ BEGIN
+         ALTER TABLE "share_links" ADD CONSTRAINT "share_links_scope_person_id_persons_id_fk"
+           FOREIGN KEY ("scope_person_id") REFERENCES "persons"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "tree_invites" ADD CONSTRAINT "tree_invites_scope_person_id_persons_id_fk"
+           FOREIGN KEY ("scope_person_id") REFERENCES "persons"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "tree_members" ADD CONSTRAINT "tree_members_scope_person_id_persons_id_fk"
+           FOREIGN KEY ("scope_person_id") REFERENCES "persons"("id") ON DELETE set null;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+    ],
+  },
 ];

@@ -28,12 +28,12 @@ export default async function TreeCanvasPage({
   const { tree, role } = access;
   const editable = canEdit(role);
 
-  const peopleRows = await db
+  let peopleRows = await db
     .select()
     .from(persons)
     .where(eq(persons.treeId, treeId));
-  const unionRows = await db.select().from(unions).where(eq(unions.treeId, treeId));
-  const linkRows = await db
+  let unionRows = await db.select().from(unions).where(eq(unions.treeId, treeId));
+  let linkRows = await db
     .select({ unionId: parentChild.unionId, childId: parentChild.childId, relation: parentChild.relation })
     .from(parentChild)
     .innerJoin(unions, eq(parentChild.unionId, unions.id))
@@ -46,12 +46,36 @@ export default async function TreeCanvasPage({
     .groupBy(memories.personId);
   const memoryCounts = new Map(memoryRows.map((r) => [r.personId, Number(r.c)]));
 
+  // Branch-scoped membership: filter to branch if invited via scoped link
+  const scopeId = (access as unknown as { scopePersonId?: string | null }).scopePersonId ?? null;
+  let filteredPeopleRows = peopleRows;
+  let filteredUnionRows = unionRows;
+  let filteredLinkRows = linkRows;
+  if (scopeId) {
+    const { getBranchPersonIds, filterUnionsByBranch, filterLinksByBranch } = await import("@/lib/branch-scope");
+    const branchIds = getBranchPersonIds(scopeId, peopleRows as never, unionRows as never, linkRows as never);
+    if (!branchIds || branchIds.size === 0) filteredPeopleRows = [];
+    else {
+      filteredPeopleRows = peopleRows.filter((pe) => branchIds.has(pe.id));
+      filteredUnionRows = filterUnionsByBranch(unionRows as never, branchIds) as never;
+      filteredLinkRows = filterLinksByBranch(linkRows as never, branchIds, unionRows as never) as never;
+    }
+    // ensure scope root is visible and focus is within branch
+    peopleRows = filteredPeopleRows;
+    unionRows = filteredUnionRows;
+    linkRows = filteredLinkRows;
+  }
+  // rebind for canvas construction
+  const peopleRowsForCanvas = scopeId ? filteredPeopleRows : peopleRows;
+  const unionRowsForCanvas = scopeId ? filteredUnionRows : unionRows;
+  const linkRowsForCanvas = scopeId ? filteredLinkRows : linkRows;
+
   const labelDefs = await listLabelDefs(treeId);
   const fieldDefs = await listCustomFieldDefs(treeId);
   const labelsByPerson = await getPersonLabelsByTree(treeId);
   const customByPerson = await getPersonCustomValuesByTree(treeId);
 
-  const canvasPersons: CanvasPerson[] = peopleRows.map((p) => {
+  const canvasPersons: CanvasPerson[] = peopleRowsForCanvas.map((p) => {
     const lbs = labelsByPerson.get(p.id) ?? [];
     const cvs = customByPerson.get(p.id) ?? [];
     return {
@@ -75,13 +99,13 @@ export default async function TreeCanvasPage({
       })),
     };
   });
-  const canvasUnions: CanvasUnion[] = unionRows.map((u) => ({
+  const canvasUnions: CanvasUnion[] = unionRowsForCanvas.map((u) => ({
     id: u.id,
     partnerAId: u.partnerAId,
     partnerBId: u.partnerBId,
     status: u.status,
   }));
-  const canvasLinks: CanvasLink[] = linkRows;
+  const canvasLinks: CanvasLink[] = linkRowsForCanvas;
 
   if (canvasPersons.length === 0) {
     return (
@@ -120,6 +144,7 @@ export default async function TreeCanvasPage({
       label: l.label,
       createdAt: l.createdAt.toISOString(),
       revoked: l.revokedAt !== null,
+      scopePersonId: (l as unknown as { scopePersonId?: string | null }).scopePersonId ?? null,
     }));
     headerExtra = (
       <>
@@ -140,7 +165,7 @@ export default async function TreeCanvasPage({
         >
           Members
         </Link>
-        <ShareMenu treeId={treeId} links={shareLinkViews} />
+        <ShareMenu treeId={treeId} links={shareLinkViews} persons={peopleRowsForCanvas.map((pr) => ({ id: pr.id, firstName: pr.firstName, lastName: pr.lastName }))} unions={unionRowsForCanvas.map((u) => ({ id: u.id, partnerAId: u.partnerAId, partnerBId: u.partnerBId }))} linksData={linkRowsForCanvas} />
       </>
     );
   } else {
@@ -152,7 +177,7 @@ export default async function TreeCanvasPage({
     const ownerName = ownerRows[0]?.name;
     memberNote = `You're a ${ROLE_LABEL[role]} on this tree${
       ownerName ? ` — shared by ${ownerName}` : ""
-    }.`;
+    }.${scopeId ? ` Limited to a branch of ${peopleRowsForCanvas.length} people.` : ""}`;
     // Editors can manage labels/fields even on private trees
     if (editable) {
       const labelsLink = (
@@ -195,7 +220,7 @@ export default async function TreeCanvasPage({
       persons={canvasPersons}
       unions={canvasUnions}
       links={canvasLinks}
-      focusPersonId={tree.focusPersonId ?? canvasPersons[0].id}
+      focusPersonId={(tree.focusPersonId && peopleRowsForCanvas.some((p) => p.id === tree.focusPersonId) ? tree.focusPersonId : canvasPersons[0]?.id ?? peopleRowsForCanvas[0]?.id) }
       canEdit={editable}
       showExport={true}
       memberNote={memberNote}

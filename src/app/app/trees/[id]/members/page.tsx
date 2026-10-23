@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { trees, users } from "@/db/schema";
+import { persons, trees, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { listTreeInvites, listTreeMembers } from "@/lib/access";
 import { MembersPanel } from "@/components/members-panel";
@@ -29,7 +29,7 @@ export default async function MembersPage({
   const tree = treeRows[0];
   if (!tree || tree.ownerId !== user.id) notFound();
 
-  const [members, invites, ownerRows] = await Promise.all([
+  const [members, invites, ownerRows, personRows] = await Promise.all([
     listTreeMembers(treeId),
     listTreeInvites(treeId),
     db
@@ -37,6 +37,7 @@ export default async function MembersPage({
       .from(users)
       .where(eq(users.id, tree.ownerId))
       .limit(1),
+    db.select({ id: persons.id, firstName: persons.firstName, lastName: persons.lastName }).from(persons).where(eq(persons.treeId, treeId)),
   ]);
   const owner = ownerRows[0];
 
@@ -97,6 +98,7 @@ export default async function MembersPage({
             email: m.user.email,
             role: m.member.role,
             joinedAt: m.member.createdAt.toISOString(),
+            scopePersonId: (m.member as unknown as { scopePersonId?: string | null }).scopePersonId ?? null,
           }))}
           invites={invites.map((i) => ({
             id: i.id,
@@ -105,7 +107,9 @@ export default async function MembersPage({
             label: i.label,
             createdAt: i.createdAt.toISOString(),
             revoked: i.revokedAt !== null,
+            scopePersonId: (i as unknown as { scopePersonId?: string | null }).scopePersonId ?? null,
           }))}
+          persons={personRows}
         />
       </div>
     </div>

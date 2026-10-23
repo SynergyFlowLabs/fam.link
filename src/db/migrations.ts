@@ -106,4 +106,13 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
       "CREATE INDEX IF NOT EXISTS `person_events_person_kind_idx` ON `person_events` (`person_id`,`kind`);",
     ],
   },
+  {
+    // Branch-scoped sharing (issue #25, P1.5)
+    name: "0007_branch_scope",
+    statements: [
+      "ALTER TABLE `share_links` ADD COLUMN `scope_person_id` text REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE set null;",
+      "ALTER TABLE `tree_invites` ADD COLUMN `scope_person_id` text REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE set null;",
+      "ALTER TABLE `tree_members` ADD COLUMN `scope_person_id` text REFERENCES `persons`(`id`) ON UPDATE no action ON DELETE set null;",
+    ],
+  },
 ];

@@ -236,6 +236,7 @@ export const shareLinks = sqliteTable(
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
     revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [index("share_links_tree_idx").on(t.treeId)],
 );
@@ -291,6 +292,7 @@ export const treeMembers = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [
     uniqueIndex("tree_members_tree_user_idx").on(t.treeId, t.userId),
@@ -325,6 +327,7 @@ export const treeInvites = sqliteTable(
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
     revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [
     index("tree_invites_tree_idx").on(t.treeId),

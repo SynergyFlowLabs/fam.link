@@ -26,27 +26,33 @@ export default async function PersonPage({
   if (!access) notFound();
   const role = access.role;
 
-  const personRows = await db
+  let personRows = await db
     .select()
     .from(persons)
     .where(eq(persons.treeId, treeId));
+  let unionRows = await db.select().from(unions).where(eq(unions.treeId, treeId));
+  let linkRows = unionRows.length > 0 ? await db.select().from(parentChild).where(inArray(parentChild.unionId, unionRows.map((u) => u.id))) : [];
+  const scopeId = (access as unknown as { scopePersonId?: string | null }).scopePersonId ?? null;
+  if (scopeId) {
+    const { getBranchPersonIds } = await import("@/lib/branch-scope");
+    const branchIds = getBranchPersonIds(scopeId, personRows as never, unionRows as never, linkRows as never);
+    if (!branchIds || !branchIds.has(personId)) notFound();
+    personRows = personRows.filter((pr) => branchIds.has(pr.id));
+  }
   const person = personRows.find((p) => p.id === personId);
   if (!person) notFound();
   const personMap = new Map(personRows.map((p) => [p.id, p]));
 
-  const unionRows = await db.select().from(unions).where(eq(unions.treeId, treeId));
-  const linkRows =
-    unionRows.length > 0
-      ? await db
-          .select()
-          .from(parentChild)
-          .where(
-            inArray(
-              parentChild.unionId,
-              unionRows.map((u) => u.id),
-            ),
-          )
-      : [];
+  if (scopeId) {
+    const { filterUnionsByBranch, filterLinksByBranch } = await import("@/lib/branch-scope");
+    unionRows = filterUnionsByBranch(unionRows as never, (await import("@/lib/branch-scope")).getBranchPersonIds(scopeId, personRows as never, unionRows as never, linkRows as never)!) as never;
+    // Re-filter linkRows to keep only unions in branch and children in branch
+    const branchIds = (await import("@/lib/branch-scope")).getBranchPersonIds(scopeId, personRows as never, unionRows as never, linkRows as never);
+    if (branchIds) linkRows = filterLinksByBranch(linkRows as never, branchIds, unionRows as never) as never;
+  } else {
+    unionRows = await db.select().from(unions).where(eq(unions.treeId, treeId));
+    linkRows = unionRows.length > 0 ? await db.select().from(parentChild).where(inArray(parentChild.unionId, unionRows.map((u) => u.id))) : [];
+  }
 
   const parents: { id: string; label: string }[] = [];
   const siblings = new Set<string>();

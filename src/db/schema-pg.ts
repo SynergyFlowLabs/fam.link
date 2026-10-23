@@ -196,6 +196,7 @@ export const shareLinks = pgTable(
     }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     revokedAt: timestamp("revoked_at"),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [index("share_links_tree_idx").on(t.treeId)],
 );
@@ -234,6 +235,7 @@ export const treeMembers = pgTable(
       onDelete: "set null",
     }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [
     uniqueIndex("tree_members_tree_user_idx").on(t.treeId, t.userId),
@@ -258,6 +260,7 @@ export const treeInvites = pgTable(
     }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     revokedAt: timestamp("revoked_at"),
+    scopePersonId: text("scope_person_id").references(() => persons.id, { onDelete: "set null" }),
   },
   (t) => [index("tree_invites_tree_idx").on(t.treeId)],
 );

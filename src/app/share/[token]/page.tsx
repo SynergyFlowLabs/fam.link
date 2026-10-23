@@ -52,19 +52,30 @@ export default async function SharedTreePage({
   const tree = treeRows[0];
   if (!tree) notFound();
 
-  const peopleRows = await db
+  let peopleRows = await db
     .select()
     .from(persons)
     .where(eq(persons.treeId, link.treeId));
-  const unionRows = await db
+  let unionRows = await db
     .select()
     .from(unions)
     .where(eq(unions.treeId, link.treeId));
-  const linkRows = await db
+  let linkRows = await db
     .select({ unionId: parentChild.unionId, childId: parentChild.childId, relation: parentChild.relation })
     .from(parentChild)
     .innerJoin(unions, eq(parentChild.unionId, unions.id))
     .where(eq(unions.treeId, link.treeId));
+  // Branch scope: filter to branch if share link is scoped
+  const scopeId = (link as unknown as { scopePersonId?: string | null }).scopePersonId;
+  if (scopeId) {
+    const { getBranchPersonIds, filterUnionsByBranch, filterLinksByBranch } = await import("@/lib/branch-scope");
+    const branchIds = getBranchPersonIds(scopeId, peopleRows as never, unionRows as never, linkRows as never);
+    if (!branchIds) notFound();
+    if (branchIds.size === 0) notFound();
+    peopleRows = peopleRows.filter((p) => branchIds.has(p.id));
+    unionRows = filterUnionsByBranch(unionRows as never, branchIds) as never;
+    linkRows = filterLinksByBranch(linkRows as never, branchIds, unionRows as never) as never;
+  }
   const memoryRows = await db
     .select({ personId: memories.personId, c: count() })
     .from(memories)
@@ -106,6 +117,10 @@ export default async function SharedTreePage({
 
   if (canvasPersons.length === 0) notFound();
 
+  const shareBranchNote = scopeId ? `Shared branch view — ${peopleRows.length} people · living relatives kept private.` : "Shared read-only view — living relatives are kept private. Built with fam.link.";
+  // Ensure focus is in branch when scoped
+  const effectiveFocus = (scopeId && tree.focusPersonId && peopleRows.some((p) => p.id === tree.focusPersonId) ? tree.focusPersonId : undefined) ?? (canvasPersons[0]?.id ?? null);
+  if (!effectiveFocus) notFound();
   return (
     <TreeCanvas
       treeId={link.treeId}
@@ -113,11 +128,11 @@ export default async function SharedTreePage({
       persons={canvasPersons}
       unions={canvasUnions}
       links={canvasLinks}
-      focusPersonId={tree.focusPersonId ?? canvasPersons[0].id}
+      focusPersonId={effectiveFocus}
       readOnly
       labelDefs={labelDefs.map((l) => ({ id: l.id, name: l.name, color: l.color }))}
       fieldDefs={fieldDefs.map((f) => ({ id: f.id, name: f.name, kind: f.kind as never, optionsJson: f.optionsJson }))}
-      shareNote="Shared read-only view — living relatives are kept private. Built with fam.link."
+      shareNote={shareBranchNote}
     />
   );
 }
