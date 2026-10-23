@@ -4,6 +4,7 @@
 > **Version:** 2.0 · 2026-10-23
 > **RE:** `rea` submodule at `./rea` (morluto/rea @ 6.7.0) — see `docs/rea-setup.md`
 > **Status:** Research complete · Ready for implementation
+> **Implementation:** Tracked in issues [#22](https://github.com/SynergyFlowLabs/fam.link/issues/22) → [#40](https://github.com/SynergyFlowLabs/fam.link/issues/40) — see [`docs/roadmap-issues.md`](./docs/roadmap-issues.md) · Owner: @imgul
 
 ---
 
