@@ -397,6 +397,25 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
     ],
   },
   {
+    // Geocode cache for the map view (issue #29, P2.4)
+    name: "0005_place_geocodes",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "place_geocodes" (
+         "id" text PRIMARY KEY NOT NULL,
+         "place_key" text NOT NULL,
+         "place_text" text NOT NULL,
+         "lat" double precision NOT NULL,
+         "lng" double precision NOT NULL,
+         "display_name" text,
+         "source" text,
+         "created_at" timestamp DEFAULT now() NOT NULL,
+         "updated_at" timestamp DEFAULT now() NOT NULL
+       )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "place_geocodes_place_key_unique" ON "place_geocodes" ("place_key")`,
+      `CREATE INDEX IF NOT EXISTS "place_geocodes_key_idx" ON "place_geocodes" ("place_key")`,
+    ],
+  },
+  {
     name: "0004_branch_scope",
     statements: [
       `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "scope_person_id" text REFERENCES "persons"("id") ON DELETE set null`,

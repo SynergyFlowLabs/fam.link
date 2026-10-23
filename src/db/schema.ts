@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, real } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 /**
@@ -560,6 +560,37 @@ export const personEvents = sqliteTable(
   ],
 );
 
+/**
+ * Geocode cache — optional lat/lng for place texts, keyed by the normalized
+ * place string (see src/lib/places.ts normalizePlaceKey). Places themselves
+ * stay free-form fuzzy text; this table is additive and never required:
+ * a place without a row simply has no pin on the map. Rows are written only
+ * by the best-effort geocode server action (src/actions/geocode.ts) — never
+ * user-entered.
+ */
+export const placeGeocodes = sqliteTable(
+  "place_geocodes",
+  {
+    id: text("id").primaryKey(),
+    placeKey: text("place_key").notNull().unique(),
+    // Last-seen original text (display fallback; not canonical)
+    placeText: text("place_text").notNull(),
+    lat: real("lat").notNull(),
+    lng: real("lng").notNull(),
+    // Geocoder's full display name, e.g. "Lahore, Punjab, Pakistan"
+    displayName: text("display_name"),
+    // e.g. "nominatim" — provenance of the coordinates
+    source: text("source"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [index("place_geocodes_key_idx").on(t.placeKey)],
+);
+
 export type LabelDef = typeof labelDefs.$inferSelect;
 export type PersonLabel = typeof personLabels.$inferSelect;
 export type MemoryLabel = typeof memoryLabels.$inferSelect;
@@ -580,3 +611,4 @@ export type ShareLink = typeof shareLinks.$inferSelect;
 export type TreeMember = typeof treeMembers.$inferSelect;
 export type TreeInvite = typeof treeInvites.$inferSelect;
 export type TreeSuggestion = typeof treeSuggestions.$inferSelect;
+export type PlaceGeocode = typeof placeGeocodes.$inferSelect;

@@ -134,6 +134,7 @@ export default async function SharedTreePage({
       fieldDefs={fieldDefs.map((f) => ({ id: f.id, name: f.name, kind: f.kind as never, optionsJson: f.optionsJson }))}
       shareNote={shareBranchNote}
       timelineHref={`/share/${token}/timeline`}
+      mapHref={`/share/${token}/map`}
     />
   );
 }

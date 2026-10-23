@@ -72,6 +72,8 @@ interface Props {
   shareNote?: string | null;
   /** Link to the timeline/memoir view — rendered as a header pill when set. */
   timelineHref?: string | null;
+  /** Link to the map view — rendered as a header pill when set. */
+  mapHref?: string | null;
   /** Small note under the title for invited members (e.g. their role). */
   memberNote?: string | null;
   /** Extra header controls (owner view: Share + Members). */
@@ -110,6 +112,7 @@ export function TreeCanvas({
   shareNote = null,
   /** Link to the timeline/memoir view — shown as a header pill when set. */
   timelineHref = null,
+  mapHref = null,
   memberNote = null,
   headerExtra = null,
   importHref = null,
@@ -575,6 +578,14 @@ export function TreeCanvas({
               className="flex h-8 items-center rounded-lg border border-evergreen/40 bg-evergreen-mist px-2.5 text-xs font-medium text-evergreen-deep transition-colors hover:bg-evergreen hover:text-paper"
             >
               Timeline
+            </a>
+          )}
+          {mapHref && (
+            <a
+              href={mapHref}
+              className="flex h-8 items-center rounded-lg border border-line px-2.5 text-xs text-ink-soft transition-colors hover:border-evergreen hover:text-evergreen"
+            >
+              Map
             </a>
           )}
           {collapsedIds.size > 0 && (

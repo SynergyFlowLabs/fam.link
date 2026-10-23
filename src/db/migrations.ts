@@ -107,6 +107,16 @@ export const MIGRATIONS: { name: string; statements: string[] }[] = [
     ],
   },
   {
+    // Geocode cache for the map view (issue #29, P2.4) — additive, keyed by
+    // normalized place text; free-text places remain canonical.
+    name: "0008_place_geocodes",
+    statements: [
+      "CREATE TABLE IF NOT EXISTS `place_geocodes` (\n\t`id` text PRIMARY KEY NOT NULL,\n\t`place_key` text NOT NULL,\n\t`place_text` text NOT NULL,\n\t`lat` real NOT NULL,\n\t`lng` real NOT NULL,\n\t`display_name` text,\n\t`source` text,\n\t`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,\n\t`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL\n);",
+      "CREATE UNIQUE INDEX IF NOT EXISTS `place_geocodes_place_key_unique` ON `place_geocodes` (`place_key`);",
+      "CREATE INDEX IF NOT EXISTS `place_geocodes_key_idx` ON `place_geocodes` (`place_key`);",
+    ],
+  },
+  {
     // Branch-scoped sharing (issue #25, P1.5)
     name: "0007_branch_scope",
     statements: [
