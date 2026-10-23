@@ -9,6 +9,8 @@ import { getTreeAccess } from "@/lib/access";
 import { canEdit } from "@/lib/roles";
 import { getPublicTree } from "@/lib/public-trees";
 import { displayName, lifeLine, REDACTED_NAME } from "@/lib/canvas-types";
+import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels } from "@/lib/tree-labels";
+import { labelColorFor } from "@/lib/labels";
 import {
   SuggestEditForm,
   SuggestRelativeForm,
@@ -114,6 +116,10 @@ export default async function ExplorePersonPage({
     .from(memories)
     .where(eq(memories.personId, personId));
 
+  const personLabels = await getPersonLabels(personId);
+  const personFieldValues = await getPersonCustomValues(personId);
+  const memoryLabelsMap = await getMemoryLabelsByTree(treeId);
+
   const user = await getCurrentUser();
   const access = user ? await getTreeAccess(treeId, user.id) : null;
   const canSuggest = Boolean(user) && !(access && canEdit(access.role));
@@ -186,6 +192,37 @@ export default async function ExplorePersonPage({
             ))}
           </dl>
 
+          {personLabels.length > 0 && (
+            <div className="mt-4 border-t border-line pt-4">
+              <h3 className="text-xs font-medium text-ink-soft">Labels</h3>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {personLabels.map((l) => (
+                  <span
+                    key={l.id}
+                    className="rounded-full border px-2.5 py-1 text-xs font-medium"
+                    style={{ backgroundColor: `${labelColorFor(l.name, l.color)}18`, borderColor: labelColorFor(l.name, l.color), color: labelColorFor(l.name, l.color) }}
+                  >
+                    {l.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {personFieldValues.length > 0 && (
+            <div className="mt-4 border-t border-line pt-4">
+              <h3 className="text-xs font-medium text-ink-soft">Custom fields</h3>
+              <dl className="mt-2 space-y-1 text-sm">
+                {personFieldValues.map((v) => (
+                  <div key={v.fieldId} className="flex justify-between gap-4">
+                    <dt className="text-ink-soft">{v.fieldName}</dt>
+                    <dd className="text-ink">{v.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+
           <h3 className="mt-7 mb-3 border-t border-line pt-4 text-sm font-semibold text-ink">
             Relationships
           </h3>
@@ -202,28 +239,44 @@ export default async function ExplorePersonPage({
                 Memories
               </h2>
               <ul className="mt-3 flex flex-col gap-3">
-                {memoryRows.map((m) => (
-                  <li
-                    key={m.id}
-                    className="rounded-xl border border-line/70 bg-paper px-4 py-3"
-                  >
-                    <p className="text-sm leading-relaxed text-ink">{m.body}</p>
-                    <p className="mt-1.5 text-xs text-ink-soft">
-                      {m.kind === "photo"
-                        ? "📷 "
-                        : m.kind === "voice"
-                          ? "🎙 "
-                        : ""}
-                      {m.authorName ?? "Someone"}
-                      {m.occurredText ? ` · ${m.occurredText}` : ""} ·{" "}
-                      {new Date(m.createdAt).toLocaleDateString("en", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </li>
-                ))}
+                {memoryRows.map((m) => {
+                  const mLabels = memoryLabelsMap.get(m.id) ?? [];
+                  return (
+                    <li
+                      key={m.id}
+                      className="rounded-xl border border-line/70 bg-paper px-4 py-3"
+                    >
+                      <p className="text-sm leading-relaxed text-ink">{m.body}</p>
+                      {mLabels.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {mLabels.map((l) => (
+                            <span
+                              key={l.id}
+                              className="rounded-full border px-2 py-0.5 text-[11px]"
+                              style={{ backgroundColor: `${labelColorFor(l.name, l.color)}14`, borderColor: labelColorFor(l.name, l.color), color: labelColorFor(l.name, l.color) }}
+                            >
+                              {l.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p className="mt-1.5 text-xs text-ink-soft">
+                        {m.kind === "photo"
+                          ? "📷 "
+                          : m.kind === "voice"
+                            ? "🎙 "
+                          : ""}
+                        {m.authorName ?? "Someone"}
+                        {m.occurredText ? ` · ${m.occurredText}` : ""} ·{" "}
+                        {new Date(m.createdAt).toLocaleDateString("en", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

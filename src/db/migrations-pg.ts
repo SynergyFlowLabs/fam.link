@@ -272,4 +272,106 @@ export const PG_MIGRATIONS: { name: string; statements: string[] }[] = [
        EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
     ],
   },
+      {
+    name: "0002_labels_custom_fields",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS "label_defs" (
+        "id" text PRIMARY KEY NOT NULL,
+        "tree_id" text NOT NULL,
+        "name" text NOT NULL,
+        "color" text,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "label_defs_tree_name_idx" ON "label_defs" ("tree_id","name")`,
+      `CREATE INDEX IF NOT EXISTS "label_defs_tree_idx" ON "label_defs" ("tree_id")`,
+      `CREATE TABLE IF NOT EXISTS "person_labels" (
+        "id" text PRIMARY KEY NOT NULL,
+        "person_id" text NOT NULL,
+        "label_id" text NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "person_labels_person_label_idx" ON "person_labels" ("person_id","label_id")`,
+      `CREATE INDEX IF NOT EXISTS "person_labels_label_idx" ON "person_labels" ("label_id")`,
+      `CREATE INDEX IF NOT EXISTS "person_labels_person_idx" ON "person_labels" ("person_id")`,
+      `CREATE TABLE IF NOT EXISTS "memory_labels" (
+        "id" text PRIMARY KEY NOT NULL,
+        "memory_id" text NOT NULL,
+        "label_id" text NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "memory_labels_memory_label_idx" ON "memory_labels" ("memory_id","label_id")`,
+      `CREATE INDEX IF NOT EXISTS "memory_labels_label_idx" ON "memory_labels" ("label_id")`,
+      `CREATE TABLE IF NOT EXISTS "custom_field_defs" (
+        "id" text PRIMARY KEY NOT NULL,
+        "tree_id" text NOT NULL,
+        "name" text NOT NULL,
+        "kind" text NOT NULL,
+        "options_json" text,
+        "created_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "custom_field_defs_tree_name_idx" ON "custom_field_defs" ("tree_id","name")`,
+      `CREATE INDEX IF NOT EXISTS "custom_field_defs_tree_idx" ON "custom_field_defs" ("tree_id")`,
+      `CREATE TABLE IF NOT EXISTS "person_custom_values" (
+        "id" text PRIMARY KEY NOT NULL,
+        "person_id" text NOT NULL,
+        "field_id" text NOT NULL,
+        "value" text NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "person_custom_values_person_field_idx" ON "person_custom_values" ("person_id","field_id")`,
+      `CREATE INDEX IF NOT EXISTS "person_custom_values_field_idx" ON "person_custom_values" ("field_id")`,
+      `CREATE INDEX IF NOT EXISTS "person_custom_values_person_idx" ON "person_custom_values" ("person_id")`,
+      `CREATE TABLE IF NOT EXISTS "memory_custom_values" (
+        "id" text PRIMARY KEY NOT NULL,
+        "memory_id" text NOT NULL,
+        "field_id" text NOT NULL,
+        "value" text NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "memory_custom_values_memory_field_idx" ON "memory_custom_values" ("memory_id","field_id")`,
+      `CREATE INDEX IF NOT EXISTS "memory_custom_values_field_idx" ON "memory_custom_values" ("field_id")`,
+      `DO $$ BEGIN
+         ALTER TABLE "label_defs" ADD CONSTRAINT "label_defs_tree_id_trees_id_fk"
+           FOREIGN KEY ("tree_id") REFERENCES "trees"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "person_labels" ADD CONSTRAINT "person_labels_person_id_persons_id_fk"
+           FOREIGN KEY ("person_id") REFERENCES "persons"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "person_labels" ADD CONSTRAINT "person_labels_label_id_label_defs_id_fk"
+           FOREIGN KEY ("label_id") REFERENCES "label_defs"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "memory_labels" ADD CONSTRAINT "memory_labels_memory_id_memories_id_fk"
+           FOREIGN KEY ("memory_id") REFERENCES "memories"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "memory_labels" ADD CONSTRAINT "memory_labels_label_id_label_defs_id_fk"
+           FOREIGN KEY ("label_id") REFERENCES "label_defs"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "custom_field_defs" ADD CONSTRAINT "custom_field_defs_tree_id_trees_id_fk"
+           FOREIGN KEY ("tree_id") REFERENCES "trees"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "person_custom_values" ADD CONSTRAINT "person_custom_values_person_id_persons_id_fk"
+           FOREIGN KEY ("person_id") REFERENCES "persons"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "person_custom_values" ADD CONSTRAINT "person_custom_values_field_id_custom_field_defs_id_fk"
+           FOREIGN KEY ("field_id") REFERENCES "custom_field_defs"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "memory_custom_values" ADD CONSTRAINT "memory_custom_values_memory_id_memories_id_fk"
+           FOREIGN KEY ("memory_id") REFERENCES "memories"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+      `DO $$ BEGIN
+         ALTER TABLE "memory_custom_values" ADD CONSTRAINT "memory_custom_values_field_id_custom_field_defs_id_fk"
+           FOREIGN KEY ("field_id") REFERENCES "custom_field_defs"("id") ON DELETE cascade;
+       EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+    ],
+  },
 ];

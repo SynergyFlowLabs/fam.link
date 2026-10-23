@@ -189,6 +189,80 @@ export const QURAISH_LINKS: DemoLink[] = [
   { id: "demo-ql-ali-husayn", u: "demo-qu-ali-fatimah", child: "demo-q-husayn" },
 ];
 
+
+export interface DemoLabelDef {
+  id: string;
+  treeId: string;
+  name: string;
+  color: string | null;
+}
+export interface DemoPersonLabel {
+  id: string;
+  personId: string;
+  labelId: string;
+}
+export interface DemoCustomFieldDef {
+  id: string;
+  treeId: string;
+  name: string;
+  kind: "text" | "number" | "date" | "select";
+  optionsJson: string | null;
+}
+export interface DemoPersonCustomValue {
+  id: string;
+  personId: string;
+  fieldId: string;
+  value: string;
+}
+export interface DemoMemoryLabel {
+  id: string;
+  memoryId: string;
+  labelId: string;
+}
+
+export const DEMO_LABEL_DEFS: DemoLabelDef[] = [
+  { id: "demo-lbl-immigrant", treeId: "demo-tree", name: "Immigrant", color: "#2f5d50" },
+  { id: "demo-lbl-veteran", treeId: "demo-tree", name: "Veteran", color: "#96574f" },
+  { id: "demo-lbl-caregiver", treeId: "demo-tree", name: "Primary caregiver", color: "#5b7a99" },
+  { id: "demo-lbl-historian", treeId: "demo-tree", name: "Family historian", color: "#b98a2f" },
+  { id: "demo-lbl-migration", treeId: "demo-tree", name: "Migration", color: "#2f5d50" },
+  { id: "demo-lbl-family-legend", treeId: "demo-tree", name: "Family legend", color: "#7a6a4a" },
+];
+
+export const DEMO_PERSON_LABELS: DemoPersonLabel[] = [
+  { id: "demo-pl-yusuf-imm", personId: "demo-p-yusuf", labelId: "demo-lbl-immigrant" },
+  { id: "demo-pl-amna-imm", personId: "demo-p-amna", labelId: "demo-lbl-immigrant" },
+  { id: "demo-pl-kareem-vet", personId: "demo-p-kareem", labelId: "demo-lbl-veteran" },
+  { id: "demo-pl-yusuf-vet", personId: "demo-p-yusuf", labelId: "demo-lbl-veteran" },
+  { id: "demo-pl-farida-care", personId: "demo-p-farida", labelId: "demo-lbl-caregiver" },
+  { id: "demo-pl-ali-hist", personId: "demo-p-ali", labelId: "demo-lbl-historian" },
+  { id: "demo-pl-sara-hist", personId: "demo-p-sara", labelId: "demo-lbl-historian" },
+];
+
+export const DEMO_CUSTOM_FIELD_DEFS: DemoCustomFieldDef[] = [
+  { id: "demo-cf-occupation", treeId: "demo-tree", name: "Occupation", kind: "text", optionsJson: null },
+  { id: "demo-cf-military", treeId: "demo-tree", name: "Military service", kind: "text", optionsJson: null },
+  { id: "demo-cf-aliases", treeId: "demo-tree", name: "Known aliases", kind: "text", optionsJson: null },
+  { id: "demo-cf-branch", treeId: "demo-tree", name: "Branch", kind: "select", optionsJson: JSON.stringify(["Paternal","Maternal","Married-in"]) },
+];
+
+export const DEMO_PERSON_CUSTOM_VALUES: DemoPersonCustomValue[] = [
+  { id: "demo-pcv-yusuf-occ", personId: "demo-p-yusuf", fieldId: "demo-cf-occupation", value: "Schoolteacher" },
+  { id: "demo-pcv-yusuf-mil", personId: "demo-p-yusuf", fieldId: "demo-cf-military", value: "British Indian Army" },
+  { id: "demo-pcv-kareem-occ", personId: "demo-p-kareem", fieldId: "demo-cf-occupation", value: "Fruit merchant" },
+  { id: "demo-pcv-ahmed-occ", personId: "demo-p-ahmed", fieldId: "demo-cf-occupation", value: "Civil engineer" },
+  { id: "demo-pcv-amna-alias", personId: "demo-p-amna", fieldId: "demo-cf-aliases", value: "Bibi Ji" },
+  { id: "demo-pcv-yusuf-branch", personId: "demo-p-yusuf", fieldId: "demo-cf-branch", value: "Paternal" },
+  { id: "demo-pcv-ahmed-branch", personId: "demo-p-ahmed", fieldId: "demo-cf-branch", value: "Paternal" },
+  { id: "demo-pcv-farida-branch", personId: "demo-p-farida", fieldId: "demo-cf-branch", value: "Maternal" },
+];
+
+export const DEMO_MEMORY_LABELS: DemoMemoryLabel[] = [
+  { id: "demo-ml-yusuf-watch-mig", memoryId: "demo-m-yusuf-watch", labelId: "demo-lbl-migration" },
+  { id: "demo-ml-amna-rotis-legend", memoryId: "demo-m-amna-rotis", labelId: "demo-lbl-family-legend" },
+  { id: "demo-ml-kareem-mango-legend", memoryId: "demo-m-kareem-mangoes", labelId: "demo-lbl-family-legend" },
+];
+
 export const QURAISH_MEMORIES: DemoMemory[] = [
   { id: "demo-qm-zamzam", person: "demo-q-abdulmuttalib", body: "Dreamed of where to dig, and found Zamzam again after it had been lost — the well that still quenches pilgrims beside the Kaaba.", when: null, author: null },
   { id: "demo-qm-khadijah-caravans", person: "demo-q-khadijah", body: "Ran her own trade caravans and sent the young Muhammad to Syria as her agent; his honesty on that journey is why she proposed.", when: "c. 595", author: null },

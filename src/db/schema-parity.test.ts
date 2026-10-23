@@ -15,6 +15,12 @@ import type {
   User,
   Media,
   ParentChild,
+  LabelDef,
+  PersonLabel,
+  MemoryLabel,
+  CustomFieldDef,
+  PersonCustomValue,
+  MemoryCustomValue,
 } from "./schema.ts";
 import type {
   PgMemory,
@@ -27,6 +33,12 @@ import type {
   PgUser,
   PgMedia,
   PgParentChild,
+  PgLabelDef,
+  PgPersonLabel,
+  PgMemoryLabel,
+  PgCustomFieldDef,
+  PgPersonCustomValue,
+  PgMemoryCustomValue,
 } from "./schema-pg.ts";
 
 /**
@@ -52,6 +64,12 @@ const SQLITE_TABLES = {
   treeMembers: sqlite.treeMembers,
   treeInvites: sqlite.treeInvites,
   treeSuggestions: sqlite.treeSuggestions,
+  labelDefs: sqlite.labelDefs,
+  personLabels: sqlite.personLabels,
+  memoryLabels: sqlite.memoryLabels,
+  customFieldDefs: sqlite.customFieldDefs,
+  personCustomValues: sqlite.personCustomValues,
+  memoryCustomValues: sqlite.memoryCustomValues,
 } as const;
 
 const PG_TABLES = {
@@ -68,6 +86,12 @@ const PG_TABLES = {
   treeMembers: pg.treeMembers,
   treeInvites: pg.treeInvites,
   treeSuggestions: pg.treeSuggestions,
+  labelDefs: pg.labelDefs,
+  personLabels: pg.personLabels,
+  memoryLabels: pg.memoryLabels,
+  customFieldDefs: pg.customFieldDefs,
+  personCustomValues: pg.personCustomValues,
+  memoryCustomValues: pg.memoryCustomValues,
 } as const;
 
 describe("schema parity (sqlite ↔ postgres)", () => {
@@ -121,4 +145,16 @@ export type SchemaParityCheck = [
   TreeMember extends PgTreeMember ? true : never,
   PgTreeInvite extends TreeInvite ? true : never,
   TreeInvite extends PgTreeInvite ? true : never,
+  PgLabelDef extends LabelDef ? true : never,
+  LabelDef extends PgLabelDef ? true : never,
+  PgPersonLabel extends PersonLabel ? true : never,
+  PersonLabel extends PgPersonLabel ? true : never,
+  PgMemoryLabel extends MemoryLabel ? true : never,
+  MemoryLabel extends PgMemoryLabel ? true : never,
+  PgCustomFieldDef extends CustomFieldDef ? true : never,
+  CustomFieldDef extends PgCustomFieldDef ? true : never,
+  PgPersonCustomValue extends PersonCustomValue ? true : never,
+  PersonCustomValue extends PgPersonCustomValue ? true : never,
+  PgMemoryCustomValue extends MemoryCustomValue ? true : never,
+  MemoryCustomValue extends PgMemoryCustomValue ? true : never,
 ];

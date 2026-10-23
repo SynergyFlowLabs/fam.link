@@ -300,6 +300,130 @@ export const treeSuggestions = pgTable(
   ],
 );
 
+
+export const labelDefs = pgTable(
+  "label_defs",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("label_defs_tree_name_idx").on(t.treeId, t.name),
+    index("label_defs_tree_idx").on(t.treeId),
+  ],
+);
+
+export const personLabels = pgTable(
+  "person_labels",
+  {
+    id: text("id").primaryKey(),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    labelId: text("label_id")
+      .notNull()
+      .references(() => labelDefs.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("person_labels_person_label_idx").on(t.personId, t.labelId),
+    index("person_labels_label_idx").on(t.labelId),
+    index("person_labels_person_idx").on(t.personId),
+  ],
+);
+
+export const memoryLabels = pgTable(
+  "memory_labels",
+  {
+    id: text("id").primaryKey(),
+    memoryId: text("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    labelId: text("label_id")
+      .notNull()
+      .references(() => labelDefs.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("memory_labels_memory_label_idx").on(t.memoryId, t.labelId),
+    index("memory_labels_label_idx").on(t.labelId),
+  ],
+);
+
+export const customFieldDefs = pgTable(
+  "custom_field_defs",
+  {
+    id: text("id").primaryKey(),
+    treeId: text("tree_id")
+      .notNull()
+      .references(() => trees.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    kind: text("kind", {
+      enum: ["text", "number", "date", "select"],
+    }).notNull(),
+    optionsJson: text("options_json"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("custom_field_defs_tree_name_idx").on(t.treeId, t.name),
+    index("custom_field_defs_tree_idx").on(t.treeId),
+  ],
+);
+
+export const personCustomValues = pgTable(
+  "person_custom_values",
+  {
+    id: text("id").primaryKey(),
+    personId: text("person_id")
+      .notNull()
+      .references(() => persons.id, { onDelete: "cascade" }),
+    fieldId: text("field_id")
+      .notNull()
+      .references(() => customFieldDefs.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("person_custom_values_person_field_idx").on(t.personId, t.fieldId),
+    index("person_custom_values_field_idx").on(t.fieldId),
+    index("person_custom_values_person_idx").on(t.personId),
+  ],
+);
+
+export const memoryCustomValues = pgTable(
+  "memory_custom_values",
+  {
+    id: text("id").primaryKey(),
+    memoryId: text("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    fieldId: text("field_id")
+      .notNull()
+      .references(() => customFieldDefs.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("memory_custom_values_memory_field_idx").on(t.memoryId, t.fieldId),
+    index("memory_custom_values_field_idx").on(t.fieldId),
+  ],
+);
+
+export type PgLabelDef = typeof labelDefs.$inferSelect;
+export type PgPersonLabel = typeof personLabels.$inferSelect;
+export type PgMemoryLabel = typeof memoryLabels.$inferSelect;
+export type PgCustomFieldDef = typeof customFieldDefs.$inferSelect;
+export type PgPersonCustomValue = typeof personCustomValues.$inferSelect;
+export type PgMemoryCustomValue = typeof memoryCustomValues.$inferSelect;
+
+
 export type PgUser = typeof users.$inferSelect;
 export type PgTree = typeof trees.$inferSelect;
 export type PgPerson = typeof persons.$inferSelect;

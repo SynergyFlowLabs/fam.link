@@ -5,9 +5,14 @@
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { hashPasswordSync } from "@/lib/auth-hash";
 import {
+  DEMO_CUSTOM_FIELD_DEFS,
+  DEMO_LABEL_DEFS,
   DEMO_LINKS,
   DEMO_MEMORIES,
+  DEMO_MEMORY_LABELS,
   DEMO_PERSONS,
+  DEMO_PERSON_CUSTOM_VALUES,
+  DEMO_PERSON_LABELS,
   DEMO_TREE,
   DEMO_UNIONS,
   DEMO_USER,
@@ -118,4 +123,44 @@ export async function ensureDemoDataPg(db: PgAppDb): Promise<void> {
       })),
     );
   }
+
+  await db.insert(pg.labelDefs).values(
+    DEMO_LABEL_DEFS.map((l) => ({
+      id: l.id,
+      treeId: l.treeId,
+      name: l.name,
+      color: l.color,
+    })),
+  );
+  await db.insert(pg.personLabels).values(
+    DEMO_PERSON_LABELS.map((pl) => ({
+      id: pl.id,
+      personId: pl.personId,
+      labelId: pl.labelId,
+    })),
+  );
+  await db.insert(pg.customFieldDefs).values(
+    DEMO_CUSTOM_FIELD_DEFS.map((f) => ({
+      id: f.id,
+      treeId: f.treeId,
+      name: f.name,
+      kind: f.kind,
+      optionsJson: f.optionsJson,
+    })),
+  );
+  await db.insert(pg.personCustomValues).values(
+    DEMO_PERSON_CUSTOM_VALUES.map((v) => ({
+      id: v.id,
+      personId: v.personId,
+      fieldId: v.fieldId,
+      value: v.value,
+    })),
+  );
+  await db.insert(pg.memoryLabels).values(
+    DEMO_MEMORY_LABELS.map((ml) => ({
+      id: ml.id,
+      memoryId: ml.memoryId,
+      labelId: ml.labelId,
+    })),
+  );
 }

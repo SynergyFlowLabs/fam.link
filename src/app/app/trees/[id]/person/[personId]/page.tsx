@@ -8,6 +8,8 @@ import { getTreeAccess } from "@/lib/access";
 import { canComment, canEdit } from "@/lib/roles";
 import { displayName, lifeLine } from "@/lib/canvas-types";
 import { AddRelativeCard, EditPersonForm, MemorySection, DeletePersonButton } from "@/components/person-forms";
+import { PersonLabelsSection, PersonCustomFieldsSection } from "@/components/labels-fields";
+import { getMemoryLabelsByTree, getPersonCustomValues, getPersonLabels, listCustomFieldDefs, listLabelDefs } from "@/lib/tree-labels";
 
 export default async function PersonPage({
   params,
@@ -75,6 +77,12 @@ export default async function PersonPage({
     .select()
     .from(memories)
     .where(eq(memories.personId, personId));
+
+  const personLabels = await getPersonLabels(personId);
+  const allLabelDefs = await listLabelDefs(treeId);
+  const fieldDefs = await listCustomFieldDefs(treeId);
+  const personFieldValues = await getPersonCustomValues(personId);
+  const memoryLabelsMap = await getMemoryLabelsByTree(treeId);
 
   const name = displayName(person);
   const initials = [person.firstName, person.lastName]
@@ -177,6 +185,14 @@ export default async function PersonPage({
           personName={name}
           canAdd={canComment(role)}
           canDeleteAny={canEdit(role)}
+          canLabel={canComment(role) || canEdit(role)}
+          allLabelDefs={allLabelDefs.map((l) => ({ id: l.id, name: l.name, color: l.color }))}
+          memoryLabelsMap={Object.fromEntries(
+            memoryRows.map((m) => {
+              const lbs = memoryLabelsMap.get(m.id) ?? [];
+              return [m.id, lbs.map((l) => ({ id: l.id, name: l.name, color: l.color }))];
+            }),
+          )}
           initialMemories={memoryRows.map((m) => ({
             id: m.id,
             kind: m.kind,
@@ -191,6 +207,23 @@ export default async function PersonPage({
               year: "numeric",
             }),
           }))}
+        />
+      </div>
+
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <PersonLabelsSection
+          treeId={treeId}
+          personId={personId}
+          labels={personLabels.map((l) => ({ id: l.id, name: l.name, color: l.color }))}
+          allLabelDefs={allLabelDefs.map((l) => ({ id: l.id, name: l.name, color: l.color }))}
+          canEdit={canEdit(role)}
+        />
+        <PersonCustomFieldsSection
+          treeId={treeId}
+          personId={personId}
+          fieldDefs={fieldDefs.map((f) => ({ id: f.id, name: f.name, kind: f.kind as string, optionsJson: f.optionsJson }))}
+          values={personFieldValues}
+          canEdit={canEdit(role)}
         />
       </div>
 

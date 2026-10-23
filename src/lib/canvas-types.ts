@@ -1,5 +1,18 @@
 /** Shapes passed from server pages to the client canvas. */
 
+export interface LabelChip {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
+export interface CustomFieldChip {
+  fieldId: string;
+  fieldName: string;
+  kind: "text" | "number" | "date" | "select";
+  value: string;
+}
+
 export interface CanvasPerson {
   id: string;
   firstName: string | null;
@@ -12,6 +25,10 @@ export interface CanvasPerson {
   deathDateText: string | null;
   deathPlace: string | null;
   memoryCount: number;
+  /** Labels attached to this person (filtered for privacy when redacted). */
+  labels?: LabelChip[];
+  /** Custom field values for this person. */
+  customFields?: CustomFieldChip[];
   /** True when details are hidden for a living person on a public share view. */
   redacted?: boolean;
 }
@@ -69,6 +86,8 @@ export function redactPerson(p: CanvasPerson): CanvasPerson {
     deathDateText: null,
     deathPlace: null,
     memoryCount: 0,
+    labels: [],
+    customFields: [],
     redacted: true,
   };
 }
