@@ -7,6 +7,8 @@ Guidance for AI coding agents working on **fam.link** — a free, open, story-fi
 - **What we're building:** a web app where anyone can build their family tree as deep as they know and attach the stories, photos, and memories behind every name. Free forever, no lock-in, privacy-first.
 - **Product spec:** read `docs/product-brief.md` before proposing features. It contains the positioning, principles, MVP scope, and explicit non-goals (no records search, no DNA, no paywalls).
 - **Progress tracking:** `PROGRESS.md` at the repo root is the source of truth for what's done and what's next. **Update it and push after every completed step.**
+- **Fresh agent sessions clone shallow** (history cut at the most recent merge): `git log -- <path>` can make a long-shipped feature look never-implemented. Before filing an issue or building something, check the real history: `gh api "repos/SynergyFlowLabs/fam.link/commits?path=<path>"`. (This exact blind spot caused issue #60 to be filed for GEDCOM import, which had shipped in `da6b361`.)
+- **GitHub integration permissions:** the agent integration can create issues and merge PRs, but **cannot** close/edit/comment on issues. Close issues with an unformatted closing keyword (`Closes #N`) in the **merged PR body** or the commit message — backticks around the keyword disable it.
 
 ## Stack
 
