@@ -39,7 +39,7 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 | 1.7 | Photo memories (upload + display on profile) | ✅ |
 | 1.8 | Read-only share links with living-person redaction | ✅ |
 | 1.9 | GEDCOM export | ✅ |
-| 1.10 | GEDCOM import (review workflow) | ⬜ |
+| 1.10 | GEDCOM import (review workflow) | ✅ `da6b361` — stage → preview → confirm; 32 GEDCOM tests incl. round-trip |
 | 1.11 | JSON export | ✅ |
 | 1.12 | Invite collaborators with roles | ✅ |
 | 1.13 | Vercel deployment (auto-migrate, auto-seed, /tmp data dir) | ✅ |
@@ -81,7 +81,7 @@ Product spec: `docs/product-brief.md` · Agent conventions: `AGENTS.md`
 
 ## Phase 5 — Advanced & analytics (future)
 
-Privacy-first groundwork shipped with #40 (pure local analytics, opt-in panel). Remaining, all explicitly future: historical context overlay (needs a curated source), smart memory-mining suggestions (needs data depth), GEDCOM 5.5.1 import review workflow (1.10), i18n + RTL (2.4), public API, merge governance, persistent blob storage for uploads. Non-goals stand: no DNA, no record hints, no auto-matching, no ads, no model training on private content.
+Privacy-first groundwork shipped with #40 (pure local analytics, opt-in panel). Remaining, all explicitly future: historical context overlay (needs a curated source), smart memory-mining suggestions (needs data depth), i18n + RTL (2.4), public API, merge governance, persistent blob storage for uploads. Non-goals stand: no DNA, no record hints, no auto-matching, no ads, no model training on private content.
 
 ---
 
@@ -95,9 +95,10 @@ Privacy-first groundwork shipped with #40 (pure local analytics, opt-in panel). 
 
 Remaining backlog (all tracked, none blocking):
 
-1. **GEDCOM import** (1.10) — the last Phase-1 item; review workflow like the suggestion queue
-2. **i18n + RTL** (2.4) — global-by-design needs Urdu/Arabic script direction
-3. **Persistent uploads** — blob storage so media survives cold starts (DB rows already survive)
-4. **Hosted Postgres** — one `DATABASE_URL` env var flip; schema + migrations already dual-ported
-5. **Historical context overlay** (#40 follow-up) — needs a curated public-domain source
-6. **Public API + merge governance** (Phase 3 tail) — after data depth grows
+1. **i18n + RTL** (2.4) — global-by-design needs Urdu/Arabic script direction
+2. **Persistent uploads** — blob storage so media survives cold starts (DB rows already survive)
+3. **Hosted Postgres** — one `DATABASE_URL` env var flip; schema + migrations already dual-ported
+4. **Historical context overlay** (#40 follow-up) — needs a curated public-domain source
+5. **Public API + merge governance** (Phase 3 tail) — after data depth grows
+
+(Correction 2026-10-23: GEDCOM import was already shipped — `da6b361`, MVP 1.10, guided review workflow with round-trip tests; the tracker had it marked ⬜ in error.)
