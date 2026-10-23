@@ -24,6 +24,7 @@ import { breadcrumbNames, describeRelationship, findRelationshipPath, searchPers
 import { relationLabel, relationStrokeProps } from "@/lib/layout/edges";
 import type { RelationKind } from "@/lib/canvas-types";
 import { setFocusPersonAction } from "@/actions/persons";
+import { buildCollapseGraph, getDescendantBranchIds, branchCount, getVisibleIds, isInViewport, collapsedAncestorsOf } from "@/lib/collapse-store";
 import { QuickAddModal, type Relation } from "./quick-add-modal";
 
 /** Clamp a view rectangle so it always overlaps the content bounds —
@@ -116,6 +117,8 @@ export function TreeCanvas({
   const exportsOn = showExport ?? !readOnly;
   const [layoutKind, setLayoutKind] = useState<LayoutKind>("hourglass");
   const [compact, setCompact] = useState(false);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  const [collapsedLoaded, setCollapsedLoaded] = useState(false);
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -127,8 +130,13 @@ export function TreeCanvas({
       if (saved && (LAYOUT_KINDS as string[]).includes(saved) && !k) setLayoutKind(saved as LayoutKind);
       const savedC = localStorage.getItem("famlink:compact");
       if (savedC === "1" && !c) setCompact(true);
+      const savedCollapsed = localStorage.getItem(`famlink:collapsed:${treeId}`);
+      if (savedCollapsed) {
+        try { const arr = JSON.parse(savedCollapsed); if (Array.isArray(arr)) setCollapsedIds(new Set(arr)); } catch {}
+      }
     } catch {}
-  }, []);
+    setCollapsedLoaded(true);
+  }, [treeId]);
   useEffect(() => {
     try {
       localStorage.setItem("famlink:layout", layoutKind);
@@ -141,28 +149,62 @@ export function TreeCanvas({
       window.history.replaceState(null, "", url);
     } catch {}
   }, [layoutKind, compact]);
+  useEffect(() => {
+    if (!collapsedLoaded) return;
+    try { localStorage.setItem(`famlink:collapsed:${treeId}`, JSON.stringify([...collapsedIds])); } catch {}
+  }, [collapsedIds, treeId, collapsedLoaded]);
+  // Collapse: build graph from original (unfiltered) persons so branches include future hidden persons
+  const collapseGraph = useMemo(() => buildCollapseGraph({ unions, links }), [unions, links]);
+  const parentUnionsByChild = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const l of links) {
+      const list = m.get(l.childId) ?? [];
+      if (!list.includes(l.unionId)) list.push(l.unionId);
+      m.set(l.childId, list);
+    }
+    return m;
+  }, [links]);
+  const partnerOfForAncestors = useCallback((uid: string) => {
+    const u = unions.find((x) => x.id === uid);
+    if (!u) return [];
+    return u.partnerBId ? [u.partnerAId, u.partnerBId] : [u.partnerAId];
+  }, [unions]);
+
+  const visibleIds = useMemo(() => getVisibleIds(persons.map((p) => p.id), collapsedIds, collapseGraph), [persons, collapsedIds, collapseGraph]);
+  const visiblePersons = useMemo(() => persons.filter((p) => visibleIds.has(p.id)), [persons, visibleIds]);
+  const visibleUnions = useMemo(() => unions.filter((u) => {
+    const aVis = visibleIds.has(u.partnerAId);
+    const bVis = u.partnerBId ? visibleIds.has(u.partnerBId) : true;
+    // keep union if all its partners are visible (couple edge needs both)
+    if (u.partnerBId) return aVis && bVis;
+    return aVis;
+  }), [unions, visibleIds]);
+  const visibleLinks = useMemo(() => links.filter((l) => visibleIds.has(l.childId) && visibleUnions.some((u) => u.id === l.unionId)), [links, visibleIds, visibleUnions]);
+  const visibleUnionIds = useMemo(() => new Set(visibleUnions.map((u) => u.id)), [visibleUnions]);
+
   const layout: LayoutResult = useMemo(
     () =>
       layoutWithKind(
         {
-          persons: persons.map((p) => ({
+          persons: visiblePersons.map((p) => ({
             id: p.id,
             birthHint: p.birthDateText,
           })),
-          unions,
-          links,
-          focusPersonId,
+          unions: visibleUnions,
+          links: visibleLinks,
+          focusPersonId: visibleIds.has(focusPersonId) ? focusPersonId : (visiblePersons[0]?.id ?? focusPersonId),
         },
         layoutKind,
         compact,
       ),
-    [persons, unions, links, focusPersonId, layoutKind, compact],
+    [visiblePersons, visibleUnions, visibleLinks, focusPersonId, visibleIds, layoutKind, compact],
   );
   const dims = layoutDims(compact);
   const personById = useMemo(
     () => new Map(persons.map((p) => [p.id, p])),
     [persons],
   );
+  const visiblePersonById = useMemo(() => new Map(visiblePersons.map((p) => [p.id, p])), [visiblePersons]);
   const personBase = personHrefBase ?? `/app/trees/${treeId}`;
   const nodeById = useMemo(
     () => new Map(layout.nodes.map((n) => [n.id, n])),
@@ -231,6 +273,29 @@ export function TreeCanvas({
   /** Search result → pan the view so the person sits centre-stage. */
   const locatePerson = useCallback(
     (id: string) => {
+      // auto-expand collapsed ancestors if target is hidden
+      if (!visibleIds.has(id)) {
+        const ancestors = collapsedAncestorsOf(id, collapsedIds, parentUnionsByChild, partnerOfForAncestors);
+        if (ancestors.length > 0) {
+          setCollapsedIds((prev) => {
+            const next = new Set(prev);
+            for (const a of ancestors) next.delete(a);
+            return next;
+          });
+          // will re-render with new visible set; locate after next frame
+          setTimeout(() => {
+            const node2 = layout.nodes.find((n) => n.id === id);
+            if (node2) {
+              const h2 = view.w * aspect;
+              setView(clampView(node2.x - view.w / 2, node2.y - h2 / 2, view.w));
+              setHighlightId(id);
+              if (highlightTimer.current) clearTimeout(highlightTimer.current);
+              highlightTimer.current = setTimeout(() => setHighlightId(null), 2200);
+            }
+          }, 80);
+          return;
+        }
+      }
       const node = layout.nodes.find((n) => n.id === id);
       if (!node) return;
       const h = view.w * aspect;
@@ -239,7 +304,7 @@ export function TreeCanvas({
       if (highlightTimer.current) clearTimeout(highlightTimer.current);
       highlightTimer.current = setTimeout(() => setHighlightId(null), 2200);
     },
-    [layout.nodes, view.w, aspect, clampView],
+    [layout.nodes, view.w, aspect, clampView, visibleIds, collapsedIds, parentUnionsByChild, partnerOfForAncestors],
   );
 
   useEffect(() => {
@@ -376,8 +441,37 @@ export function TreeCanvas({
     if (g === -3) return "Great- grandparents";
     return `Gen ${g}`;
   };
-  const totalMemories = persons.reduce((s, p) => s + p.memoryCount, 0);
+  const totalMemories = visiblePersons.reduce((s, p) => s + p.memoryCount, 0);
+  const visibleCount = visiblePersons.length;
+  const hiddenCount = persons.length - visibleCount;
   const focusPerson = personById.get(focusPersonId);
+
+  const hasChildren = useCallback((id: string) => {
+    for (const uid of collapseGraph.unionsByPerson.get(id) ?? []) {
+      const kids = collapseGraph.childrenByUnion.get(uid) ?? [];
+      if (kids.length > 0) return true;
+    }
+    return false;
+  }, [collapseGraph]);
+  const toggleCollapse = useCallback((id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const expandAll = useCallback(() => setCollapsedIds(new Set()), []);
+  const collapsedChips = useMemo(() => {
+    const chips: { id: string; count: number; x: number; y: number }[] = [];
+    for (const cid of collapsedIds) {
+      if (!visibleIds.has(cid)) continue; // hidden by ancestor, don't show chip
+      const node = layout.nodes.find((n) => n.id === cid);
+      if (!node) continue;
+      const cnt = branchCount(cid, collapseGraph);
+      chips.push({ id: cid, count: cnt, x: node.x, y: node.y + dims.NODE_H / 2 + 16 });
+    }
+    return chips;
+  }, [collapsedIds, visibleIds, layout.nodes, collapseGraph, dims]);
 
   // ----- filters (labels + custom fields) -----
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
@@ -457,7 +551,7 @@ export function TreeCanvas({
             {treeName}
           </h1>
           <p className="text-xs text-ink-soft">
-            {persons.length} {persons.length === 1 ? "person" : "people"} ·{" "}
+            {visibleCount} {visibleCount === 1 ? "person" : "people"}{hiddenCount > 0 ? ` · ${hiddenCount} hidden` : ""} ·{" "}
             {generations} {generations === 1 ? "generation" : "generations"}
             {totalMemories > 0 ? ` · ${totalMemories} memories` : ""}
             {focusPerson ? ` · centered on ${displayName(focusPerson)}` : ""}
@@ -471,6 +565,9 @@ export function TreeCanvas({
         </div>
         <div className="flex items-center gap-1.5">
           <LayoutSwitcher kind={layoutKind} onKind={setLayoutKind} compact={compact} onCompact={setCompact} />
+          {collapsedIds.size > 0 && (
+            <button type="button" onClick={expandAll} className="flex h-8 items-center rounded-lg border border-line bg-card px-2.5 text-xs text-ink-soft hover:border-evergreen hover:text-evergreen">Expand all ({collapsedIds.size})</button>
+          )}
           {persons.length > 5 && (
             <TreeSearch persons={persons} onLocate={locatePerson} />
           )}
@@ -584,6 +681,37 @@ export function TreeCanvas({
           style={{ cursor: dragging ? "grabbing" : "grab" }}
           role="application"
           aria-label={`Family tree: ${treeName}`}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "*" && hoverId) {
+              // expand all siblings at same generation as hovered
+              const hoverGen = layout.nodes.find((x) => x.id === hoverId)?.generation;
+              if (hoverGen !== undefined) {
+                const siblingsAtGen = layout.nodes.filter((x) => x.generation === hoverGen).map((x) => x.id);
+                let changed = false;
+                setCollapsedIds((prev) => {
+                  const next = new Set(prev);
+                  for (const sid of siblingsAtGen) {
+                    if (next.has(sid)) { next.delete(sid); changed = true; }
+                  }
+                  return changed ? next : prev;
+                });
+              }
+            }
+            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+              const visibleOrder = layout.nodes.map((x) => x.id);
+              const idx = hoverId ? visibleOrder.indexOf(hoverId) : -1;
+              let nextIdx = idx;
+              if (e.key === "ArrowDown" || e.key === "ArrowRight") nextIdx = Math.min(visibleOrder.length - 1, idx + 1);
+              if (e.key === "ArrowUp" || e.key === "ArrowLeft") nextIdx = Math.max(0, idx - 1);
+              if (nextIdx !== idx && nextIdx >= 0) {
+                e.preventDefault();
+                const nid = visibleOrder[nextIdx];
+                setHoverId(nid);
+                locatePerson(nid);
+              }
+            }
+          }}
         >
           <defs>
             <pattern id="canvas-dots" width="28" height="28" patternUnits="userSpaceOnUse">
@@ -626,15 +754,27 @@ export function TreeCanvas({
             </g>
           ))}
           <Edges
-            unions={unions}
-            links={links}
+            unions={visibleUnions}
+            links={visibleLinks}
             nodeById={nodeById}
             unionById={unionById}
             hiddenRelations={hiddenRelations}
             nodeW={dims.NODE_W}
             nodeH={dims.NODE_H}
           />
-          {layout.nodes.map((n) => {
+          {/* Collapsed branch chips */}
+          {collapsedChips.map((chip) => (
+            <g key={`chip-${chip.id}`} transform={`translate(${chip.x}, ${chip.y})`} className="cursor-pointer" role="button" tabIndex={0} aria-expanded={false} aria-label={`Expand ${chip.count} hidden people under ${personById.get(chip.id)?.firstName ?? chip.id}`} onClick={() => toggleCollapse(chip.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleCollapse(chip.id); } }}>
+              <rect x={-46} y={-12} width={92} height={24} rx={12} fill="var(--color-evergreen-mist)" stroke="var(--color-evergreen)" strokeWidth={1} />
+              <text x={0} y={4} textAnchor="middle" fontSize={11} fontWeight={600} fill="var(--color-evergreen-deep)">{chip.count} hidden · expand</text>
+            </g>
+          ))}
+          {layout.nodes.filter((n) => {
+            if (visiblePersons.length < 500) return true;
+            const h = view.w * aspect;
+            const vp = { x: view.x, y: view.y, w: view.w, h };
+            return isInViewport({ x: n.x, y: n.y }, vp, 300);
+          }).map((n) => {
             const p = personById.get(n.id);
             if (!p) return null;
             const isFiltered =
@@ -681,6 +821,9 @@ export function TreeCanvas({
                 dimmed={!isFiltered}
                 compact={compact}
                 isList={layoutKind === "list"}
+                hasChildren={hasChildren(n.id)}
+                collapsed={collapsedIds.has(n.id)}
+                onToggleCollapse={() => toggleCollapse(n.id)}
               />
             );
           })}
@@ -1095,6 +1238,9 @@ function PersonNode({
   dimmed = false,
   compact = false,
   isList = false,
+  hasChildren = false,
+  collapsed = false,
+  onToggleCollapse,
   onHover,
   onQuickAdd,
 }: {
@@ -1115,6 +1261,9 @@ function PersonNode({
   dimmed?: boolean;
   compact?: boolean;
   isList?: boolean;
+  hasChildren?: boolean;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
   onHover: (id: string | null) => void;
   onQuickAdd: (relation: Relation) => void;
 }) {
@@ -1243,6 +1392,12 @@ function PersonNode({
         </g>
       )}
 
+      {hasChildren && (
+        <g transform={`translate(${dims.W - 14}, -10)`} className="cursor-pointer" role="button" tabIndex={0} aria-expanded={!collapsed} aria-label={collapsed ? `Expand branch` : `Collapse branch` } onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleCollapse?.(); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleCollapse?.(); } }}>
+          <circle r={10} fill={collapsed ? "var(--color-evergreen)" : "var(--color-card)"} stroke="var(--color-evergreen)" strokeWidth={1.2} />
+          <text x={0} y={3.5} textAnchor="middle" fontSize={12} fill={collapsed ? "white" : "var(--color-evergreen)"} fontWeight={600}>{collapsed ? "▸" : "▾"}</text>
+        </g>
+      )}
       {hovered && canEdit && (
         <g>
           {pills.map((pill) => (
